@@ -3,6 +3,7 @@ package com.phincall.webrtc.ui
 import android.app.Dialog
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.WindowManager
 import android.widget.GridLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
@@ -17,7 +18,7 @@ class DtmfKeypadDialog(
 
     private var _binding: DialogDtmfKeypadBinding? = null
     private val binding get() = _binding!!
-    private val enteredDigits = StringBuilder()
+    private var digitCount = 0
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         _binding = DialogDtmfKeypadBinding.inflate(LayoutInflater.from(requireContext()))
@@ -41,8 +42,9 @@ class DtmfKeypadDialog(
                     setMargins(marginPx, marginPx, marginPx, marginPx)
                 }
                 setOnClickListener {
-                    enteredDigits.append(digit)
-                    binding.textDtmfEcho.text = enteredDigits.toString()
+                    digitCount += 1
+                    // Mask entered digits to protect IVR PINs and account numbers from shoulder surfing.
+                    binding.textDtmfEcho.text = "\u2022".repeat(digitCount)
                     onDigitPressed(digit)
                 }
             }
@@ -53,7 +55,9 @@ class DtmfKeypadDialog(
 
         return MaterialAlertDialogBuilder(requireContext())
             .setView(binding.root)
-            .create()
+            .create().apply {
+                window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
     }
 
     override fun onDestroyView() {

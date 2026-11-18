@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Expose only app-private diagnostic log files via FileProvider temporary URI grants. -->
+    <files-path name="diagnostic_logs" path="logs/" />
+</paths>

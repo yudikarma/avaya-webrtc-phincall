@@ -3,10 +3,23 @@ package com.phincall.webrtc.config
 import com.avaya.ocs.Services.Work.Enums.PlatformType
 
 /**
- * Sample non-production lab defaults matching Avaya WebRTC Connect Guide 4.0.10.
- * Replace FQDNs with your enterprise AMC cluster, AAWG server, and token proxy endpoints.
+ * Default values aligned with the Avaya WebRTC Connect 4.0.10 Android Reference Client
+ * (preferences.xml, preferences_elite.xml, attributes.xml, and strings.xml).
  */
 object SampleConfigurations {
+
+    const val DEFAULT_AMC_URL_PATH = "services/AvayaMobileCommunications/sessions"
+    const val DEFAULT_AAWG_URL_PATH = "csa/resources/tenants/default"
+    const val DEFAULT_TOKEN_URL_PATH = "token-generation-service/token/getEncryptedToken"
+    const val DEFAULT_LOCALE = "en_us"
+    const val DEFAULT_PRIORITY = 5
+    const val DEFAULT_LOG_FILE_NAME = "WebRTCReferenceClient"
+
+    fun defaultAttributesForOceana(): List<AttributeEntry> = listOf(
+        AttributeEntry("Location", "Inhouse"),
+        AttributeEntry("Language", "English"),
+        AttributeEntry("Service", "Sales")
+    )
 
     fun defaultFor(platformType: PlatformType): InteractionLaunchConfig {
         val isOceana = platformType == PlatformType.OCEANA
@@ -14,35 +27,44 @@ object SampleConfigurations {
             platformType = platformType,
             mediaMode = CallMediaMode.VIDEO,
             amcConfig = AmcServerConfig(
-                serverFqdn = if (isOceana) "amc.contactcenter.example.com" else "",
+                serverFqdn = "",
                 port = 443,
                 secure = true,
-                urlPath = ""
+                urlPath = DEFAULT_AMC_URL_PATH
             ),
             webGatewayConfig = WebGatewayConfigModel(
-                serverFqdn = "aawg.contactcenter.example.com",
+                serverFqdn = "",
                 port = 443,
                 secure = true,
-                urlPath = ""
+                urlPath = DEFAULT_AAWG_URL_PATH
             ),
-            // 10.0.2.2 maps Android Emulator to localhost where token-proxy/server.js listens.
             tokenProxyConfig = TokenProxyConfig(
-                serverHost = "10.0.2.2",
-                port = 8443,
-                secure = false,
-                path = "api/tokens",
+                serverHost = "",
+                port = 443,
+                secure = true,
+                path = DEFAULT_TOKEN_URL_PATH,
+                clientApiKey = "",
                 expirationMs = "120000"
             ),
             callerProfile = CallerProfile(
-                destinationNumber = if (isOceana) "1000" else "2000",
+                destinationNumber = "",
                 callingNumber = "",
                 displayName = ""
             ),
             routingMetadata = RoutingMetadata(
-                rawAttributes = if (isOceana) "Language: English; Service: Sales" else "",
-                servicePriority = 5,
-                contextId = "ORD-2026-00419",
-                topic = "billing"
+                attributes = if (isOceana) defaultAttributesForOceana() else emptyList(),
+                servicePriority = DEFAULT_PRIORITY,
+                contextId = "",
+                topic = "",
+                locale = DEFAULT_LOCALE,
+                routingStrategy = RoutingStrategyOption.MOST_IDLE.apiValue,
+                resourceSourceName = "",
+                resourceId = ""
+            ),
+            loggingConfig = LoggingConfig(
+                logToDevice = false,
+                logFileName = DEFAULT_LOG_FILE_NAME,
+                supportEmail = ""
             ),
             videoSettings = VideoSettings()
         )

@@ -39,6 +39,9 @@ class InCallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Block screenshots, screen recording, and Recents thumbnails of live calls and IVR digits.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+
         binding = ActivityInCallBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -117,6 +120,11 @@ class InCallActivity : AppCompatActivity() {
     }
 
     private fun bindControls() {
+        binding.buttonCallStats.setOnClickListener {
+            if (supportFragmentManager.findFragmentByTag(CallStatsDialog.TAG) == null) {
+                CallStatsDialog().show(supportFragmentManager, CallStatsDialog.TAG)
+            }
+        }
         binding.buttonMuteAudio.setOnClickListener {
             app.interactionCoordinator.toggleAudioMute()
         }
@@ -189,7 +197,6 @@ class InCallActivity : AppCompatActivity() {
             binding.textSignallingWarning.text = snapshot.signallingBanner
         }
 
-        // Audio mute button state
         binding.buttonMuteAudio.setImageResource(
             if (snapshot.isAudioMuted) R.drawable.ic_mic_off else R.drawable.ic_mic_on
         )
@@ -200,7 +207,6 @@ class InCallActivity : AppCompatActivity() {
             )
         )
 
-        // Hold button state (disabled if held remotely per Avaya Reference Client behavior)
         binding.buttonHold.isEnabled = !snapshot.isHeldRemotely
         binding.buttonHold.alpha = if (snapshot.isHeldRemotely) 0.45f else 1.0f
         binding.buttonHold.backgroundTintList = ColorStateList.valueOf(
@@ -210,7 +216,6 @@ class InCallActivity : AppCompatActivity() {
             )
         )
 
-        // Video controls state
         if (snapshot.mediaMode == CallMediaMode.VIDEO) {
             binding.buttonMuteVideo.setImageResource(
                 if (snapshot.isVideoMuted) R.drawable.ic_video_off else R.drawable.ic_video_on
@@ -302,6 +307,7 @@ class InCallActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         (supportFragmentManager.findFragmentByTag(DtmfKeypadDialog.TAG) as? DtmfKeypadDialog)?.dismissAllowingStateLoss()
+        (supportFragmentManager.findFragmentByTag(CallStatsDialog.TAG) as? CallStatsDialog)?.dismissAllowingStateLoss()
         app.interactionCoordinator.onActivityStopped()
     }
 

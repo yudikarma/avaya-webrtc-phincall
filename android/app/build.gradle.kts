@@ -66,7 +66,9 @@ android {
                 "META-INF/notice.txt",
                 "META-INF/license.txt",
                 "META-INF/dependencies.txt",
-                "META-INF/LGPL2.1"
+                "META-INF/LGPL2.1",
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties"
             )
         }
     }
@@ -76,9 +78,9 @@ dependencies {
     // Avaya WebRTC Connect SDK 4.0.10 (CSDK 605.1.10, Android SDK 36 & 16 KB page aligned)
     implementation(files("libs/oceanacustomerwebvoicevideo.aar"))
 
-    // Required transitive networking and logging dependencies of oceanacustomerwebvoicevideo.aar
-    implementation("io.netty:netty-all:4.1.17.Final")
-    implementation("org.slf4j:slf4j-api:2.0.13")
+    // Patched Netty 4.1.x replacing legacy 4.1.17.Final to remediate known HTTP/TLS CVEs.
+    implementation("io.netty:netty-all:4.1.119.Final")
+    implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // AndroidX UI, lifecycle, and coroutines

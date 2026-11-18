@@ -8,6 +8,14 @@
 -keepclassmembers class * {
     @org.greenrobot.eventbus.Subscribe <methods>;
 }
+
+# Strip verbose/debug/info Logcat calls in release builds to prevent runtime data leaks.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
+
 -dontwarn io.netty.**
 -dontwarn org.slf4j.**
 -dontwarn com.fasterxml.jackson.**

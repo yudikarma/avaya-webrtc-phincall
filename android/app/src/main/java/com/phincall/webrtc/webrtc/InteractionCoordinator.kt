@@ -3,6 +3,7 @@ package com.phincall.webrtc.webrtc
 import android.app.Application
 import android.util.Log
 import android.view.ViewGroup
+import com.avaya.clientservices.call.CallType
 import com.avaya.ocs.Config.ClientConfiguration
 import com.avaya.ocs.Config.Config
 import com.avaya.ocs.Config.WebGatewayConfiguration
@@ -11,6 +12,9 @@ import com.avaya.ocs.OceanaCustomerWebVoiceVideo
 import com.avaya.ocs.Services.Device.Video.Enums.CallQuality
 import com.avaya.ocs.Services.Device.Video.Enums.CameraType
 import com.avaya.ocs.Services.Device.Video.VideoDevice
+import com.avaya.ocs.Services.Statistics.AudioDetails
+import com.avaya.ocs.Services.Statistics.CallDetails
+import com.avaya.ocs.Services.Statistics.VideoDetails
 import com.avaya.ocs.Services.Work.Enums.AudioDeviceError
 import com.avaya.ocs.Services.Work.Enums.AudioDeviceType
 import com.avaya.ocs.Services.Work.Enums.DTMFTone
@@ -28,8 +32,10 @@ import com.avaya.ocs.Services.Work.Schema.Attributes
 import com.avaya.ocs.Services.Work.Schema.Resource
 import com.avaya.ocs.Services.Work.Schema.Service
 import com.avaya.ocs.Services.Work.Work
+import com.phincall.webrtc.BuildConfig
 import com.phincall.webrtc.config.CallMediaMode
 import com.phincall.webrtc.config.InteractionLaunchConfig
+import com.phincall.webrtc.logging.DiagnosticLogManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +48,8 @@ import java.util.logging.Level
  * 1) In-memory token handoff -> 2) SDK ClientConfiguration -> 3) Work setup -> 4) Interaction start.
  */
 class InteractionCoordinator(
-    private val application: Application
+    private val application: Application,
+    private val diagnosticLogManager: DiagnosticLogManager
 ) : VideoInteractionListener, ConnectionListener, OnAudioDeviceChangeListener {
 
     private val _state = MutableStateFlow(CallStateSnapshot())
@@ -68,6 +75,7 @@ class InteractionCoordinator(
             return false
         }
         launchConfig = config
+        diagnosticLogManager.configure(config.loggingConfig)
         discardRequested.set(false)
         restoreCameraOnResume = false
         mutedVideoForBackground = false
@@ -82,7 +90,9 @@ class InteractionCoordinator(
     }
 
     fun releaseLockOnPreCallFailure(errorMessage: String) {
+        launchConfig = null
         interactionLocked.set(false)
+        diagnosticLogManager.recordEvent(TAG, "Pre-call failure: $errorMessage")
         _state.update { it.copy(isLocked = false, errorMessage = errorMessage) }
     }
 
@@ -102,6 +112,7 @@ class InteractionCoordinator(
             val client = createSdkClient(config)
             val sdkVersion = runCatching { client.versionNumber }.getOrDefault("4.0.10")
             _state.update { it.copy(sdkVersion = sdkVersion) }
+            diagnosticLogManager.recordEvent(TAG, "Initialized SDK $sdkVersion (${config.platformType.name}/${config.mediaMode.name})")
 
             val work = createConfiguredWork(client, config)
 
@@ -133,11 +144,11 @@ class InteractionCoordinator(
             }
             Result.success(Unit)
         } catch (ex: AuthorizationTokenException) {
-            Log.e(TAG, "Authorization token rejected by SDK", ex)
+            logFailure("Authorization token rejected by SDK", ex)
             handleStartupFailure("Authorization token error: ${ex.message}")
             Result.failure(ex)
         } catch (ex: Exception) {
-            Log.e(TAG, "Failed to start interaction", ex)
+            logFailure("Failed to start interaction", ex)
             handleStartupFailure("Unable to start interaction: ${ex.message}")
             Result.failure(ex)
         }
@@ -175,7 +186,8 @@ class InteractionCoordinator(
         }
 
         return OceanaCustomerWebVoiceVideo(clientConfiguration).apply {
-            registerLogger(Level.INFO)
+            // Restrict verbose SDK logging to debug builds so release Logcat stays clean.
+            registerLogger(if (BuildConfig.DEBUG) Level.INFO else Level.SEVERE)
         }
     }
 
@@ -201,24 +213,24 @@ class InteractionCoordinator(
 
         // Skill-based Service/Attribute routing applies to Avaya Oceana (Guide 4.0.10, p. 31).
         if (launch.platformType == PlatformType.OCEANA) {
-            val attrMap = routing.parseAttributeMap()
+            val attrMap = routing.toAttributeMap()
             if (attrMap.isNotEmpty()) {
                 val sdkAttributes = Attributes()
                 attrMap.forEach { (key, values) -> sdkAttributes.add(key, values) }
                 val service = Service().apply {
                     attributes = sdkAttributes
-                    priority = routing.servicePriority
+                    priority = routing.servicePriority.coerceIn(1, 10)
                 }
                 work.services = listOf(service)
             }
+        }
 
-            if (routing.resourceId.isNotBlank() && routing.resourceSourceName.isNotBlank()) {
-                val resource = Resource().apply {
-                    nativeResourceId = routing.resourceId
-                    sourceName = routing.resourceSourceName
-                }
-                work.resources = listOf(resource)
+        if (routing.resourceId.isNotBlank() && routing.resourceSourceName.isNotBlank()) {
+            val resource = Resource().apply {
+                nativeResourceId = routing.resourceId
+                sourceName = routing.resourceSourceName
             }
+            work.resources = listOf(resource)
         }
 
         return work
@@ -241,6 +253,64 @@ class InteractionCoordinator(
 
     private fun activeInteraction(): AbstractInteraction? = videoInteraction ?: audioInteraction
 
+    fun readMediaStatistics(onResult: (String) -> Unit) {
+        val interaction = activeInteraction()
+        if (interaction == null) {
+            onResult("No active interaction.")
+            return
+        }
+
+        val callTypeLabel = runCatching {
+            if (interaction.callType == CallType.DEFAULT_REGISTERED_CALLTYPE) "SIP-UA" else "HTTP-UA"
+        }.getOrDefault("Unknown")
+
+        interaction.readAudioDetails { audioDetails: AudioDetails? ->
+            val sb = StringBuilder()
+            sb.appendLine("Audio Statistics")
+            if (audioDetails == null) {
+                sb.appendLine("  Unavailable")
+            } else {
+                val transport = if ((audioDetails as CallDetails).isMediaTunnelled) "TLS" else "UDP"
+                sb.appendLine("  Codec: ${audioDetails.codec}")
+                sb.appendLine("  Encryption: ${audioDetails.mediaEncryptionType}")
+                sb.appendLine("  Call Type: $callTypeLabel ($transport)")
+                sb.appendLine("  Packetization: ${audioDetails.packetizationIntervalMillis} ms")
+                sb.appendLine("  Round Trip Delay: ${audioDetails.roundTripTimeMillis} ms")
+                sb.appendLine("  Packets Tx / Rx: ${audioDetails.packetsTransmitted} / ${audioDetails.packetsReceived}")
+                sb.appendLine("  Bytes Tx / Rx: ${audioDetails.bytesTransmitted} / ${audioDetails.bytesReceived}")
+                sb.appendLine("  Loss Tx / Rx: ${audioDetails.fractionLostTransmitted}% / ${audioDetails.fractionLostReceived}%")
+                sb.appendLine("  Jitter Tx / Rx: ${audioDetails.averageJitterTransmittedMillis} ms / ${audioDetails.averageJitterReceivedMillis} ms")
+                sb.appendLine("  Buffer Current / Pref: ${audioDetails.currentBufferSizeMillis} ms / ${audioDetails.preferredBufferSizeMillis} ms")
+                sb.appendLine("  Packet Loss Rate: ${audioDetails.currentPacketLossRate}%")
+                sb.appendLine("  Discard / Expand Rate: ${audioDetails.currentDiscardRate}% / ${audioDetails.currentExpandRate}%")
+            }
+
+            if (videoInteraction != null) {
+                interaction.readVideoDetails { videoDetails: VideoDetails? ->
+                    sb.appendLine()
+                    sb.appendLine("Video Statistics")
+                    if (videoDetails == null) {
+                        sb.appendLine("  Unavailable")
+                    } else {
+                        val rx = videoDetails.receiveStatistics
+                        val tx = videoDetails.transmitStatistics
+                        sb.appendLine("  Codec: ${videoDetails.codec} (${videoDetails.mediaEncryptionType})")
+                        sb.appendLine("  Round Trip Delay: ${videoDetails.roundTripTimeMillis} ms")
+                        if (rx != null) {
+                            sb.appendLine("  Receive: ${rx.width}x${rx.height} @ ${rx.actualFrameRate} fps, ${rx.actualBitRate}/${rx.targetBitRate} kbps, jitter ${rx.jitterBufferSizeMillis} ms, loss ${rx.packetLossTotal} pkts")
+                        }
+                        if (tx != null) {
+                            sb.appendLine("  Transmit: ${tx.width}x${tx.height} @ ${tx.actualFrameRate} fps, ${tx.actualBitRate}/${tx.targetBitRate} kbps, jitter ${tx.jitterBufferSizeMillis} ms, loss ${tx.packetLossTotal} pkts")
+                        }
+                    }
+                    onResult(sb.toString().trimEnd())
+                }
+            } else {
+                onResult(sb.toString().trimEnd())
+            }
+        }
+    }
+
     fun refreshElapsedTime() {
         val interaction = activeInteraction() ?: return
         val elapsed = runCatching { interaction.interactionTimeElapsed }.getOrDefault(-1L)
@@ -252,19 +322,19 @@ class InteractionCoordinator(
     fun toggleAudioMute() {
         val interaction = activeInteraction() ?: return
         runCatching { interaction.muteAudio(!interaction.isAudioMuted) }
-            .onFailure { Log.e(TAG, "muteAudio failed", it) }
+            .onFailure { logFailure("muteAudio failed", it) }
     }
 
     fun toggleVideoMute() {
         val interaction = videoInteraction ?: return
         runCatching { interaction.muteVideo(!interaction.isVideoMuted) }
-            .onFailure { Log.e(TAG, "muteVideo failed", it) }
+            .onFailure { logFailure("muteVideo failed", it) }
     }
 
     fun toggleVideoEnabled() {
         val interaction = videoInteraction ?: return
         runCatching { interaction.enableVideo(!interaction.isVideoEnabled) }
-            .onFailure { Log.e(TAG, "enableVideo failed", it) }
+            .onFailure { logFailure("enableVideo failed", it) }
     }
 
     fun switchCamera() {
@@ -277,7 +347,7 @@ class InteractionCoordinator(
             }
             device.selectCamera(next)
             _state.update { it.copy(activeCamera = next) }
-        }.onFailure { Log.e(TAG, "switchCamera failed", it) }
+        }.onFailure { logFailure("switchCamera failed", it) }
     }
 
     fun toggleHold() {
@@ -288,20 +358,20 @@ class InteractionCoordinator(
             } else {
                 interaction.hold()
             }
-        }.onFailure { Log.e(TAG, "hold/unhold failed", it) }
+        }.onFailure { logFailure("hold/unhold failed", it) }
     }
 
     fun sendDtmf(digit: String) {
         val interaction = activeInteraction() ?: return
         val tone = DTMFTone.get(digit) ?: return
         runCatching { interaction.sendDtmf(tone) }
-            .onFailure { Log.e(TAG, "sendDtmf($digit) failed", it) }
+            .onFailure { logFailure("sendDtmf failed", it) }
     }
 
     fun selectAudioDevice(deviceType: AudioDeviceType) {
         val interaction = activeInteraction() ?: return
         runCatching { interaction.setAudioDevice(deviceType) }
-            .onFailure { Log.e(TAG, "setAudioDevice failed", it) }
+            .onFailure { logFailure("setAudioDevice failed", it) }
     }
 
     /**
@@ -340,7 +410,7 @@ class InteractionCoordinator(
             restoreCameraOnResume = false
             val selected = device.selectedCamera ?: CameraType.FRONT
             runCatching { device.selectCamera(selected) }
-                .onFailure { Log.e(TAG, "Camera restoration on resume failed", it) }
+                .onFailure { logFailure("Camera restoration on resume failed", it) }
         }
     }
 
@@ -359,7 +429,7 @@ class InteractionCoordinator(
             interaction.end()
             interaction.discard()
         }.onFailure { ex ->
-            Log.e(TAG, "Exception during end()/discard()", ex)
+            logFailure("Exception during end()/discard()", ex)
             finalizeCleanup()
         }
     }
@@ -373,12 +443,16 @@ class InteractionCoordinator(
         }
         runCatching { interaction.discard() }
             .onFailure { ex ->
-                Log.e(TAG, "Exception during discard()", ex)
+                logFailure("Exception during discard()", ex)
                 finalizeCleanup()
             }
     }
 
     private fun handleStartupFailure(message: String) {
+        diagnosticLogManager.recordEvent(TAG, "Startup failure: $message")
+        unregisterAndClearReferences()
+        launchConfig = null
+        interactionLocked.set(false)
         _state.update {
             it.copy(
                 interactionState = InteractionState.FAILED,
@@ -387,12 +461,13 @@ class InteractionCoordinator(
                 isLocked = false
             )
         }
-        unregisterAndClearReferences()
-        interactionLocked.set(false)
     }
 
     private fun finalizeCleanup() {
+        diagnosticLogManager.recordEvent(TAG, "Interaction discard complete")
         unregisterAndClearReferences()
+        // Drop launch configuration (including any in-memory proxy key) once the call ends.
+        launchConfig = null
         interactionLocked.set(false)
         _state.update {
             it.copy(
@@ -422,7 +497,15 @@ class InteractionCoordinator(
 
     private fun syncInteractionState() {
         val stateNow = runCatching { activeInteraction()?.interactionState }.getOrNull() ?: return
+        diagnosticLogManager.recordEvent(TAG, "State -> ${stateNow.name}")
         _state.update { it.copy(interactionState = stateNow) }
+    }
+
+    private fun logFailure(summary: String, error: Throwable) {
+        if (BuildConfig.DEBUG) {
+            Log.e(TAG, summary, error)
+        }
+        diagnosticLogManager.recordEvent(TAG, "$summary (${error.javaClass.simpleName})")
     }
 
     // AudioInteractionListener & VideoInteractionListener callbacks
@@ -442,7 +525,7 @@ class InteractionCoordinator(
                     videoSettings.capturePreference,
                     videoSettings.captureOrientation
                 )
-            }.onFailure { Log.e(TAG, "setVideoCaptureResolutionWithCaptureOrientation failed", it) }
+            }.onFailure { logFailure("setVideoCaptureResolutionWithCaptureOrientation failed", it) }
         }
     }
 
@@ -458,6 +541,7 @@ class InteractionCoordinator(
 
     override fun onInteractionHeld() {
         val remoteHeld = runCatching { activeInteraction()?.isHeldRemotely ?: false }.getOrDefault(false)
+        diagnosticLogManager.recordEvent(TAG, "Interaction held (remote=$remoteHeld)")
         _state.update {
             it.copy(
                 interactionState = InteractionState.HELD,
@@ -478,6 +562,7 @@ class InteractionCoordinator(
     }
 
     override fun onInteractionHeldRemotely() {
+        diagnosticLogManager.recordEvent(TAG, "Interaction held remotely")
         _state.update {
             it.copy(
                 interactionState = InteractionState.HELD_REMOTELY,
@@ -508,11 +593,13 @@ class InteractionCoordinator(
     }
 
     override fun onInteractionFailed(error: InteractionError?) {
+        val errCode = error?.name ?: "UNKNOWN"
+        diagnosticLogManager.recordEvent(TAG, "Interaction failed: $errCode")
         _state.update {
             it.copy(
                 interactionState = InteractionState.FAILED,
                 lastError = error,
-                errorMessage = "Interaction failed: ${error?.name ?: "UNKNOWN"}"
+                errorMessage = "Interaction failed: $errCode"
             )
         }
         triggerDiscardOnly()
@@ -525,18 +612,22 @@ class InteractionCoordinator(
     // ConnectionListener callbacks
 
     override fun onInteractionServiceConnecting() {
+        diagnosticLogManager.recordEvent(TAG, "Signalling reconnecting")
         _state.update {
             it.copy(signallingBanner = "Signalling interrupted. Attempting reconnect while media stays active.")
         }
     }
 
     override fun onInteractionServiceConnected() {
+        diagnosticLogManager.recordEvent(TAG, "Signalling connected")
         _state.update { it.copy(signallingBanner = null) }
     }
 
     override fun onInteractionServiceDisconnected(error: InteractionError?) {
+        val code = error?.name ?: "UNKNOWN"
+        diagnosticLogManager.recordEvent(TAG, "Signalling disconnected ($code)")
         _state.update {
-            it.copy(signallingBanner = "Signalling disconnected (${error?.name ?: "UNKNOWN"}). Call cannot recover.")
+            it.copy(signallingBanner = "Signalling disconnected ($code). Call cannot recover.")
         }
     }
 
@@ -558,7 +649,7 @@ class InteractionCoordinator(
     }
 
     override fun onAudioDeviceError(error: AudioDeviceError?) {
-        Log.w(TAG, "Audio device error: $error")
+        diagnosticLogManager.recordEvent(TAG, "Audio device error: $error")
     }
 
     companion object {

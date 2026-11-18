@@ -11,6 +11,16 @@ enum class CallMediaMode {
     VIDEO
 }
 
+enum class RoutingStrategyOption(val apiValue: String) {
+    MOST_IDLE("MOST_IDLE"),
+    LEAST_OCCUPIED("LEAST_OCCUPIED");
+
+    companion object {
+        fun fromApiValue(value: String?): RoutingStrategyOption =
+            entries.firstOrNull { it.apiValue.equals(value?.trim(), ignoreCase = true) } ?: MOST_IDLE
+    }
+}
+
 /**
  * Local VideoSurfaceView presets mapped to XML attributes (Guide 4.0.10, p. 39).
  * Avaya recommends videoCornerRadius in multiples of 8 and integer videoBorderWidth.
@@ -27,34 +37,34 @@ enum class LocalVideoSurfacePreset(
     DEEP_32_3("Deep rounded (radius=32, border=3)", 32, 3, R.layout.view_local_video_deep)
 }
 
+data class AttributeEntry(
+    val name: String,
+    val valuesCsv: String
+)
+
 data class AmcServerConfig(
     val serverFqdn: String,
     val port: Int = 443,
     val secure: Boolean = true,
-    val urlPath: String = ""
+    val urlPath: String = "services/AvayaMobileCommunications/sessions"
 )
 
 data class WebGatewayConfigModel(
     val serverFqdn: String,
     val port: Int = 443,
     val secure: Boolean = true,
-    val urlPath: String = ""
+    val urlPath: String = "csa/resources/tenants/default"
 )
 
 data class TokenProxyConfig(
     val serverHost: String,
-    val port: Int = 8443,
-    val secure: Boolean = false,
-    val path: String = "api/tokens",
+    val port: Int = 443,
+    val secure: Boolean = true,
+    val path: String = "token-generation-service/token/getEncryptedToken",
+    // Kept strictly in memory; never persisted to SharedPreferences or written to logs.
     val clientApiKey: String = "",
     val expirationMs: String = "120000"
-) {
-    fun buildEndpointUrl(): String {
-        val scheme = if (secure) "https" else "http"
-        val cleanPath = path.trimStart('/')
-        return "$scheme://$serverHost:$port/$cleanPath"
-    }
-}
+)
 
 data class CallerProfile(
     val destinationNumber: String,
@@ -63,39 +73,40 @@ data class CallerProfile(
 )
 
 data class RoutingMetadata(
-    val rawAttributes: String,
+    val attributes: List<AttributeEntry>,
     val servicePriority: Int = 5,
     val contextId: String = "",
     val topic: String = "",
-    val locale: String = "en-US",
-    val routingStrategy: String = "Most Idle",
-    val resourceId: String = "",
-    val resourceSourceName: String = ""
+    val locale: String = "en_us",
+    val routingStrategy: String = RoutingStrategyOption.MOST_IDLE.apiValue,
+    val resourceSourceName: String = "",
+    val resourceId: String = ""
 ) {
     /**
-     * Parses semicolon-delimited Oceana attributes such as "Language: English; Service: Sales".
-     * Multiple comma-separated values per key are preserved for Work Assignment matching.
+     * Converts the 3 configured Oceana attribute entries into the SDK Service map format.
+     * Comma-separated values per attribute name support multi-value Work Assignment rules.
      */
-    fun parseAttributeMap(): Map<String, List<String>> {
+    fun toAttributeMap(): Map<String, List<String>> {
         val parsed = linkedMapOf<String, List<String>>()
-        rawAttributes
-            .split(';')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it.contains(':') }
-            .forEach { entry ->
-                val idx = entry.indexOf(':')
-                val key = entry.substring(0, idx).trim()
-                val values = entry.substring(idx + 1)
-                    .split(',')
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                if (key.isNotEmpty() && values.isNotEmpty()) {
-                    parsed[key] = values
-                }
+        attributes.forEach { entry ->
+            val key = entry.name.trim()
+            val values = entry.valuesCsv
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            if (key.isNotEmpty() && values.isNotEmpty()) {
+                parsed[key] = values
             }
+        }
         return parsed
     }
 }
+
+data class LoggingConfig(
+    val logToDevice: Boolean = false,
+    val logFileName: String = "WebRTCReferenceClient",
+    val supportEmail: String = ""
+)
 
 data class VideoSettings(
     val localSurfacePreset: LocalVideoSurfacePreset = LocalVideoSurfacePreset.ROUNDED_24_2,
@@ -112,5 +123,6 @@ data class InteractionLaunchConfig(
     val tokenProxyConfig: TokenProxyConfig,
     val callerProfile: CallerProfile,
     val routingMetadata: RoutingMetadata,
+    val loggingConfig: LoggingConfig,
     val videoSettings: VideoSettings
 )
