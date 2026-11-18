@@ -24,15 +24,24 @@ The Android client never stores AAWG mTLS client certificates and never sends di
 [Android stores token in memory only -> attached to Interaction -> valid for one call]
 ```
 
-### 2. Live Runtime Platform Switching (Oceana vs Elite)
+### 2. Modern Android Architecture (Compose, Hilt DI, SDK 36)
 
-`RuntimeConfigManager` exposes a reactive `StateFlow<InteractionLaunchConfig>` backed by separate persisted Oceana and Elite profiles in `SettingsStore`:
+Built as a modern single-activity Kotlin application (`MainActivity` + `PhinCallApplication` annotated with `@HiltAndroidApp`, Gradle Version Catalog `android/gradle/libs.versions.toml`, KSP annotation processing):
 
-- **Dedicated Runtime Settings Screen (`SettingsActivity`)**: Switch live between **Avaya Oceana** and **Avaya Aura Elite**. Switching immediately saves the outgoing platform's draft, loads the target platform's profile, dynamically hides/shows Oceana-only sections (AMC Cluster and Routing Attributes), updates Destination validation hints (optional for Oceana, required for Elite), and updates the runtime execution path.
-- **Home Dialer and Recent Calls (`PreCallActivity` + `DialpadBottomSheetDialog`)**: Edge-to-edge safe areas for notification bars and display cutouts across all screens (`WindowInsetsHelper`), compact one-tap Oceana/Elite platform switcher pill in the top bar, upgraded Voice and Video Call action buttons, persistent Recent Calls log (`CallHistoryStore`, up to 25 calls) with instant Voice/Video redial, and a floating Keypad button (`ExtendedFloatingActionButton`) that opens a 3x4 telephone numpad bottom sheet to dial any destination number directly.
-- **SDK Execution (`InteractionCoordinator`)**:
-  - `PlatformType.OCEANA`: Initializes `Config` (AMC cluster) + `WebGatewayConfiguration` (AAWG), attaches `Work` Services with 3 skill attribute rows and priority, and treats `destinationAddress` as optional.
-  - `PlatformType.ELITE`: Initializes neutral `Config(null)` + `WebGatewayConfiguration` (AAWG), skips AMC and Oceana skill attributes, enforces `destinationAddress`, and dials directly over AAWG.
+- **Dependency Injection (`AppModule`)**: Provides singleton instances of hardened `OkHttpClient`, `SettingsStore`, `CallHistoryStore`, `DiagnosticLogManager`, `RuntimeConfigManager`, `TokenRepository`, `NetworkMonitor`, and `InteractionCoordinator`.
+- **Jetpack Compose + Type-Safe Navigation (`PhinCallRoute`, `PhinCallNavHost`)**: Material 3 Compose UI across all three destinations (`HomeScreen` / `HomeViewModel`, `SettingsScreen` / `SettingsViewModel`, `InCallScreen` / `InCallViewModel`) backed by unidirectional `StateFlow` state holders and `StartInteractionUseCase`.
+- **Latest Android SDK 36 Compliance**:
+  - Edge-to-edge system bar styling (`enableEdgeToEdge`) paired with `WindowInsets.safeDrawing` / `navigationBarsPadding()` / `imePadding()` safe areas across all screens and bottom sheets.
+  - Predictive back (`android:enableOnBackInvokedCallback="true"` + Compose `BackHandler` Appendix D teardown).
+  - Modern `ConnectivityManager.registerDefaultNetworkCallback` monitoring (`NetworkMonitor`) that supports private/VPN enterprise labs without blocking on public internet validation.
+  - Android 14-16 `ServiceCompat.startForeground` with permission-gated `microphone|camera` FGS types and `ForegroundServiceStartNotAllowedException` resilience (`ActiveCallForegroundService`).
+- **Live Runtime Platform Switching (Oceana vs Elite)**:
+  - **Runtime Settings Screen (`SettingsScreen`)**: Switch live between **Avaya Oceana** and **Avaya Aura Elite** using a Material 3 segmented selector. Switching immediately saves the outgoing platform's draft, loads the target platform's profile, animates/hides Oceana-only sections (AMC Cluster and Routing Attributes), and updates Destination validation hints.
+  - **Home Dialer and Recent Calls (`HomeScreen` + `DialpadBottomSheet`)**: Compact one-tap Oceana/Elite platform switcher pill in the top bar, upgraded Voice and Video Call action buttons, persistent Recent Calls log (`CallHistoryStore`, up to 25 calls) with instant Voice/Video redial per call record, and a floating Keypad button opening a Compose 3x4 telephone numpad modal bottom sheet.
+  - **In-Call Stage (`InCallScreen`)**: Bridges Avaya's `VideoSurfaceView` hierarchy via `AndroidView`, with Compose HUD, `CallQuality` indicator, bullet-masked DTMF dialog, live `readAudioDetails`/`readVideoDetails` stats dialog, audio output sheet, and Appendix D `end()` + `discard()` teardown.
+  - **SDK Execution (`InteractionCoordinator`)**:
+    - `PlatformType.OCEANA`: Initializes `Config` (AMC cluster) + `WebGatewayConfiguration` (AAWG), attaches `Work` Services with 3 skill attribute rows and priority, and treats `destinationAddress` as optional.
+    - `PlatformType.ELITE`: Initializes neutral `Config(null)` + `WebGatewayConfiguration` (AAWG), skips AMC and Oceana skill attributes, enforces `destinationAddress`, and dials directly over AAWG.
 
 ### 3. Sample App Settings Parity (`preferences.xml` and `preferences_elite.xml`)
 

@@ -60,6 +60,7 @@ jobs:
             android/settings.gradle.kts \
             android/build.gradle.kts \
             android/gradle.properties \
+            android/gradle/libs.versions.toml \
             android/gradlew \
             android/gradle/wrapper/gradle-wrapper.jar \
             android/gradle/wrapper/gradle-wrapper.properties \

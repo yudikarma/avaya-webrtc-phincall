@@ -14,6 +14,8 @@ import com.phincall.webrtc.config.RuntimeConfigManager
 import com.phincall.webrtc.config.SampleConfigurations
 import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
+import com.phincall.webrtc.ui.home.HomeUiState
+import com.phincall.webrtc.ui.settings.SettingsFormState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -154,5 +156,38 @@ class RuntimeConfigTest {
         assertEquals(PlatformType.OCEANA, parsed.first().platformType)
         assertEquals(CallOutcome.CONNECTED, parsed.first().outcome)
         assertTrue(CallHistoryStore.parseRecords("not-json").isEmpty())
+    }
+
+    @Test
+    fun settingsFormStateRoundTripsAndSeparatesOceanaVsEliteAttributes() {
+        val oceanaConfig = SampleConfigurations.defaultFor(PlatformType.OCEANA).copy(
+            amcConfig = AmcServerConfig(serverFqdn = "amc.lab.local", port = 8443),
+            webGatewayConfig = WebGatewayConfigModel(serverFqdn = "aawg.lab.local", port = 443),
+            callerProfile = CallerProfile(destinationNumber = "", callingNumber = "9001", displayName = "Tester")
+        )
+        val form = SettingsFormState.fromLaunchConfig(oceanaConfig)
+        val rebuiltOceana = form.toLaunchConfig(strictNumbers = true)
+
+        assertEquals("amc.lab.local", rebuiltOceana.amcConfig.serverFqdn)
+        assertEquals(8443, rebuiltOceana.amcConfig.port)
+        assertEquals(3, rebuiltOceana.routingMetadata.attributes.size)
+
+        val rebuiltElite = form.copy(platformType = PlatformType.ELITE, destination = "5000")
+            .toLaunchConfig(strictNumbers = true)
+        assertEquals(PlatformType.ELITE, rebuiltElite.platformType)
+        assertTrue("Elite config must omit Oceana attributes", rebuiltElite.routingMetadata.attributes.isEmpty())
+
+        val invalidPortStrict = form.copy(aawgPort = "abc").toLaunchConfig(strictNumbers = true)
+        assertTrue(
+            RuntimeConfigManager.validateForLaunch(invalidPortStrict, isDebugBuild = true)
+                .any { it.field == "aawgPort" }
+        )
+    }
+
+    @Test
+    fun homeUiStateDisablesCallActionsDuringTokenFetchOrActiveCall() {
+        assertTrue(HomeUiState().isCallActionsEnabled)
+        assertFalse(HomeUiState(isFetchingToken = true).isCallActionsEnabled)
+        assertFalse(HomeUiState(isCallLocked = true).isCallActionsEnabled)
     }
 }
