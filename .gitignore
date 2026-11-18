@@ -1,13 +1,15 @@
 # Proprietary Avaya WebRTC Connect SDK binaries (excluded per Avaya SDK EULA)
 AvayaWebRTCConnectSDKRelease4.0.10forAndroid/
-android/app/libs/*.aar
+app/libs/*.aar
 
-# Android build artifacts and local SDK path
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-android/.idea/
+# Android Studio / Gradle build artifacts and local SDK path
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
 
 # Token Proxy secrets and TLS keys
 token-proxy/.env

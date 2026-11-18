@@ -50,20 +50,22 @@ Every setting from the official Avaya Android Reference Client is persisted per 
 
 ## Repository Layout
 
-- `android/` : Kotlin Android Studio project (`compileSdk = 36`, `targetSdk = 36`, `minSdk = 28`, 16 KB aligned `jniLibs`, patched Netty `4.1.119.Final`, release/debug `network_security_config.xml`).
+- `app/`, `build.gradle.kts`, `settings.gradle.kts`, `gradle/` : Root-level Kotlin Android Studio project (`compileSdk = 36`, `targetSdk = 36`, `minSdk = 28`, 16 KB aligned `jniLibs`, patched Netty `4.1.119.Final`, release/debug `network_security_config.xml`). Open this repository folder directly in Android Studio.
 - `token-proxy/` : Zero-dependency hardened Node.js intermediary authentication proxy (`server.js`).
 - `DESIGN.md` : Visual system, WCAG AA contrast verification, and layout decisions.
+- `SECURITY.md` : Security audit findings and remediations.
 
 ## Quick Start
 
 ### 1. Copy the Avaya Android SDK AAR
 
-Copy `oceanacustomerwebvoicevideo.aar` (Release 4.0.10) into `android/app/libs/oceanacustomerwebvoicevideo.aar`.
+Copy `oceanacustomerwebvoicevideo.aar` (Release 4.0.10) into `app/libs/oceanacustomerwebvoicevideo.aar`.
 
-### 2. Build Android Debug and Release APKs
+### 2. Open in Android Studio or Build via Gradle
+
+Open the root folder (`avaya-webrtc-phincall/`) directly in Android Studio, or build from the command line:
 
 ```bash
-cd android
 ./gradlew assembleDebug
 ```
 
