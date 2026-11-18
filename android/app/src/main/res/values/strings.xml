@@ -7,6 +7,21 @@
     <string name="platform_label">Contact Center Platform</string>
     <string name="platform_oceana">Avaya Oceana</string>
     <string name="platform_elite">Avaya Aura Elite</string>
+    <string name="platform_short_oceana">Oceana</string>
+    <string name="platform_short_elite">Elite</string>
+    <string name="action_switch_platform">Switch</string>
+    <string name="action_edit_profile">Edit</string>
+    <string name="action_keypad">Keypad</string>
+    <string name="section_recent_calls">Recent Calls</string>
+    <string name="action_clear_recent">Clear</string>
+    <string name="recent_empty_title">No recent calls yet</string>
+    <string name="recent_empty_body">Tap Keypad to dial a destination number, or use Voice / Video Call above.</string>
+    <string name="recent_default_oceana">Default Oceana Routing</string>
+    <string name="dialpad_hint_number">Destination number</string>
+    <string name="cta_audio_call">Voice Call</string>
+    <string name="cta_audio_sub">Audio interaction</string>
+    <string name="cta_video_call">Video Call</string>
+    <string name="cta_video_sub">HD video interaction</string>
 
     <string name="mode_notice_oceana">Oceana runtime: connects to AMC cluster and AAWG, submits Work Services with skill attributes, and supports optional destination override.</string>
     <string name="mode_notice_elite">Elite runtime: connects directly via AAWG to Destination Address. AMC cluster and Oceana skill attributes are hidden and skipped at runtime.</string>
@@ -88,6 +103,11 @@
 
     <string name="cd_back">Navigate back</string>
     <string name="cd_open_settings">Open platform settings</string>
+    <string name="cd_switch_platform">Switch between Avaya Oceana and Avaya Aura Elite</string>
+    <string name="cd_open_dialpad">Open number keypad</string>
+    <string name="cd_backspace">Delete last digit</string>
+    <string name="cd_redial_audio">Redial with voice call</string>
+    <string name="cd_redial_video">Redial with video call</string>
     <string name="cd_mute_audio">Toggle microphone mute</string>
     <string name="cd_mute_video">Toggle camera mute</string>
     <string name="cd_enable_video">Enable or disable video stream</string>

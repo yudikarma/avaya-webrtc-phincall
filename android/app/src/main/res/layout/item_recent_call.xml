@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="68dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp">
+
+    <!-- Last call media type badge -->
+    <FrameLayout
+        android:id="@+id/badgeCallType"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_circle_audio">
+
+        <ImageView
+            android:id="@+id/iconCallType"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_call_audio" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/textRecentDestination"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/ink_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textRecentPlatformTag"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_badge_neutral"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:textColor="@color/ink_secondary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textRecentMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/ink_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- One-tap Audio Redial -->
+    <ImageButton
+        android:id="@+id/buttonRowAudioCall"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_marginEnd="6dp"
+        android:background="@drawable/bg_redial_audio"
+        android:contentDescription="@string/cd_redial_audio"
+        android:padding="10dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_call_audio"
+        app:tint="@color/slate_navy" />
+
+    <!-- One-tap Video Redial -->
+    <ImageButton
+        android:id="@+id/buttonRowVideoCall"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_redial_video"
+        android:contentDescription="@string/cd_redial_video"
+        android:padding="10dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_video_on"
+        app:tint="@color/crimson_accent" />
+</LinearLayout>

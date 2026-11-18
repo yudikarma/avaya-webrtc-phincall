@@ -8,8 +8,26 @@ const SERVER_JS = path.resolve(__dirname, "..", "server.js");
 const PORT = 18543;
 const API_KEY = "test-key-with-at-least-32-characters-123456";
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function waitForServerReady(port, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      sendRequest("GET", "/health")
+        .then((res) => {
+          if (res.status === 200) resolve();
+          else retry();
+        })
+        .catch(() => retry());
+    };
+    const retry = () => {
+      if (Date.now() >= deadline) {
+        reject(new Error("Timed out waiting for token-proxy to listen on port " + port));
+      } else {
+        setTimeout(attempt, 100);
+      }
+    };
+    attempt();
+  });
 }
 
 function spawnExpectFailure(envOverrides) {
@@ -95,7 +113,7 @@ async function run() {
   });
 
   try {
-    await sleep(500);
+    await waitForServerReady(PORT);
 
     const health = await sendRequest("GET", "/health");
     if (

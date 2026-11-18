@@ -6,8 +6,9 @@
     android:background="@color/canvas_light"
     android:orientation="vertical">
 
-    <!-- Institutional Slate Navy Settings Top Bar -->
+    <!-- Institutional Slate Navy Settings Top Bar with Status-Bar Safe Area -->
     <LinearLayout
+        android:id="@+id/topSettingsBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/slate_navy"
@@ -887,6 +888,7 @@
 
     <!-- Bottom Apply Runtime Config Bar -->
     <LinearLayout
+        android:id="@+id/bottomApplyBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/surface_light"

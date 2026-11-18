@@ -58,10 +58,18 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowInsetsHelper.enableSafeEdgeToEdge(
+            activity = this,
+            darkStatusBarIcons = false,
+            darkNavigationBarIcons = true
+        )
         // Prevent task-switcher screenshots from capturing the optional proxy API key field.
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        WindowInsetsHelper.applyTopSafeArea(binding.topSettingsBar)
+        WindowInsetsHelper.applyBottomSafeArea(binding.bottomApplyBar, includeIme = true)
 
         app = application as PhinCallApplication
         val initialConfig = app.runtimeConfigManager.activeConfig.value

@@ -39,11 +39,19 @@ class InCallActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowInsetsHelper.enableSafeEdgeToEdge(
+            activity = this,
+            darkStatusBarIcons = false,
+            darkNavigationBarIcons = false
+        )
         // Block screenshots, screen recording, and Recents thumbnails of live calls and IVR digits.
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         binding = ActivityInCallBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        WindowInsetsHelper.applyTopSafeArea(binding.topCallHud)
+        WindowInsetsHelper.applyBottomSafeArea(binding.bottomControlDock)
 
         app = application as PhinCallApplication
         val launchConfig = app.interactionCoordinator.currentLaunchConfig

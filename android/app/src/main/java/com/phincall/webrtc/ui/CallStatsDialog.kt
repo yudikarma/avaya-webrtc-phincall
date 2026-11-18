@@ -29,7 +29,7 @@ class CallStatsDialog : DialogFragment() {
             text = getString(R.string.stats_loading)
             textSize = 13f
             typeface = android.graphics.Typeface.MONOSPACE
-            setTextColor(ContextCompat.getColor(context, R.color.ink_primary))
+            setTextColor(ContextCompat.getColor(context, R.color.ink_on_dark))
             setPadding(pad, pad, pad, pad)
         }
         statsTextView = textView

@@ -8,6 +8,7 @@
 
     <!-- Top Live Status, Timer, CallQuality Banner, and Stats Button -->
     <LinearLayout
+        android:id="@+id/topCallHud"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/dock_dark"
@@ -172,6 +173,7 @@
 
     <!-- Bottom In-Call Control Dock -->
     <LinearLayout
+        android:id="@+id/bottomControlDock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/dock_dark"

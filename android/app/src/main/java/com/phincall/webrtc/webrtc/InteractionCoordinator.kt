@@ -33,7 +33,9 @@ import com.avaya.ocs.Services.Work.Schema.Resource
 import com.avaya.ocs.Services.Work.Schema.Service
 import com.avaya.ocs.Services.Work.Work
 import com.phincall.webrtc.BuildConfig
+import com.phincall.webrtc.config.CallHistoryStore
 import com.phincall.webrtc.config.CallMediaMode
+import com.phincall.webrtc.config.CallOutcome
 import com.phincall.webrtc.config.InteractionLaunchConfig
 import com.phincall.webrtc.logging.DiagnosticLogManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +51,8 @@ import java.util.logging.Level
  */
 class InteractionCoordinator(
     private val application: Application,
-    private val diagnosticLogManager: DiagnosticLogManager
+    private val diagnosticLogManager: DiagnosticLogManager,
+    private val callHistoryStore: CallHistoryStore
 ) : VideoInteractionListener, ConnectionListener, OnAudioDeviceChangeListener {
 
     private val _state = MutableStateFlow(CallStateSnapshot())
@@ -66,6 +69,8 @@ class InteractionCoordinator(
     // Tracks camera recovery after backgrounding (Avaya SDK 4.0.10 release fix).
     private var restoreCameraOnResume = false
     private var mutedVideoForBackground = false
+    private var activeHistoryRecordId: String? = null
+    private var reachedActiveState = false
 
     val currentLaunchConfig: InteractionLaunchConfig?
         get() = launchConfig
@@ -79,6 +84,8 @@ class InteractionCoordinator(
         discardRequested.set(false)
         restoreCameraOnResume = false
         mutedVideoForBackground = false
+        reachedActiveState = false
+        activeHistoryRecordId = callHistoryStore.recordCallStart(config)
         _state.value = CallStateSnapshot(
             isLocked = true,
             platformType = config.platformType,
@@ -90,6 +97,10 @@ class InteractionCoordinator(
     }
 
     fun releaseLockOnPreCallFailure(errorMessage: String) {
+        activeHistoryRecordId?.let { id ->
+            callHistoryStore.updateCallResult(id, 0L, CallOutcome.FAILED)
+        }
+        activeHistoryRecordId = null
         launchConfig = null
         interactionLocked.set(false)
         diagnosticLogManager.recordEvent(TAG, "Pre-call failure: $errorMessage")
@@ -462,6 +473,10 @@ class InteractionCoordinator(
     }
 
     private fun handleStartupFailure(message: String) {
+        activeHistoryRecordId?.let { id ->
+            callHistoryStore.updateCallResult(id, _state.value.elapsedMillis, CallOutcome.FAILED)
+        }
+        activeHistoryRecordId = null
         diagnosticLogManager.recordEvent(TAG, "Startup failure: $message")
         unregisterAndClearReferences()
         launchConfig = null
@@ -477,6 +492,15 @@ class InteractionCoordinator(
     }
 
     private fun finalizeCleanup() {
+        activeHistoryRecordId?.let { id ->
+            val outcome = when {
+                reachedActiveState -> CallOutcome.CONNECTED
+                _state.value.interactionState == InteractionState.FAILED -> CallOutcome.FAILED
+                else -> CallOutcome.INITIATED
+            }
+            callHistoryStore.updateCallResult(id, _state.value.elapsedMillis, outcome)
+        }
+        activeHistoryRecordId = null
         diagnosticLogManager.recordEvent(TAG, "Interaction discard complete")
         unregisterAndClearReferences()
         // Drop launch configuration (including any in-memory proxy key) once the call ends.
@@ -543,6 +567,7 @@ class InteractionCoordinator(
     }
 
     override fun onInteractionActive() {
+        reachedActiveState = true
         syncInteractionState()
         _state.update { it.copy(signallingBanner = null) }
     }

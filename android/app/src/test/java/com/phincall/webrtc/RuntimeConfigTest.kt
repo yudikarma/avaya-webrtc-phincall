@@ -3,8 +3,12 @@ package com.phincall.webrtc
 import com.avaya.ocs.Services.Work.Enums.PlatformType
 import com.phincall.webrtc.config.AmcServerConfig
 import com.phincall.webrtc.config.AttributeEntry
+import com.phincall.webrtc.config.CallHistoryStore
+import com.phincall.webrtc.config.CallMediaMode
+import com.phincall.webrtc.config.CallOutcome
 import com.phincall.webrtc.config.CallerProfile
 import com.phincall.webrtc.config.InputValidator
+import com.phincall.webrtc.config.RecentCallRecord
 import com.phincall.webrtc.config.RoutingMetadata
 import com.phincall.webrtc.config.RuntimeConfigManager
 import com.phincall.webrtc.config.SampleConfigurations
@@ -125,5 +129,30 @@ class RuntimeConfigTest {
         assertEquals(2, map.size)
         assertEquals(listOf("Inhouse"), map["Location"])
         assertEquals(listOf("English", "Spanish"), map["Language"])
+    }
+
+    @Test
+    fun callHistorySerializationPreservesRecordsAndBoundsMaxEntries() {
+        val sample = (1..30).map { i ->
+            RecentCallRecord(
+                id = "rec_$i",
+                destinationNumber = "50$i",
+                displayName = "Caller $i",
+                platformType = if (i % 2 == 0) PlatformType.ELITE else PlatformType.OCEANA,
+                mediaMode = if (i % 2 == 0) CallMediaMode.VIDEO else CallMediaMode.AUDIO,
+                timestampMillis = 1_700_000_000_000L + i * 1000L,
+                durationMillis = i * 5_000L,
+                outcome = CallOutcome.CONNECTED
+            )
+        }
+
+        val serialized = CallHistoryStore.serializeRecords(sample)
+        val parsed = CallHistoryStore.parseRecords(serialized)
+
+        assertEquals(CallHistoryStore.MAX_RECORDS, parsed.size)
+        assertEquals("501", parsed.first().destinationNumber)
+        assertEquals(PlatformType.OCEANA, parsed.first().platformType)
+        assertEquals(CallOutcome.CONNECTED, parsed.first().outcome)
+        assertTrue(CallHistoryStore.parseRecords("not-json").isEmpty())
     }
 }
