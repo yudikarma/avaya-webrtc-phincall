@@ -1,0 +1,267 @@
+name: CI/CD - Security Checks and Auto Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: "Also assemble the release APK"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  token-proxy-security:
+    name: Token Proxy Security Suite
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: token-proxy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax check token-proxy
+        run: node --check server.js
+
+      - name: Run token-proxy security tests
+        run: npm test
+
+  android-project-checks:
+    name: Android Project and Security Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify self-contained Android Studio project structure
+        run: |
+          set -euo pipefail
+          for required in \
+            android/settings.gradle.kts \
+            android/build.gradle.kts \
+            android/gradle.properties \
+            android/gradlew \
+            android/gradle/wrapper/gradle-wrapper.jar \
+            android/gradle/wrapper/gradle-wrapper.properties \
+            android/app/build.gradle.kts \
+            android/app/src/main/AndroidManifest.xml \
+            android/app/src/main/res/xml/network_security_config.xml; do
+            test -f "$required" || { echo "Missing required file: $required"; exit 1; }
+          done
+
+      - name: Verify release network security and secret exclusions
+        run: |
+          set -euo pipefail
+          grep -q 'android:usesCleartextTraffic="false"' android/app/src/main/AndroidManifest.xml
+          grep -q 'cleartextTrafficPermitted="false"' android/app/src/main/res/xml/network_security_config.xml
+          if grep -q 'src="user"' android/app/src/main/res/xml/network_security_config.xml; then
+            echo "Release network_security_config.xml must not trust user-installed CAs"
+            exit 1
+          fi
+          if find . -path ./.git -prune -o \( -name "*.aar" -o -name "*.keystore" -o -name "*.jks" \) -print | grep -q .; then
+            echo "Proprietary SDK .aar or signing keystore must not be committed to Git"
+            exit 1
+          fi
+
+  android-build-apk:
+    name: Build, Test, and Verify 16 KB Android APK
+    runs-on: ubuntu-latest
+    needs:
+      - token-proxy-security
+      - android-project-checks
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve proprietary Avaya SDK AAR
+        id: resolve_sdk
+        env:
+          AAR_PATH: android/app/libs/oceanacustomerwebvoicevideo.aar
+          AAR_URL: ${{ secrets.AVAYA_SDK_AAR_URL }}
+          AAR_AUTH_HEADER: ${{ secrets.AVAYA_SDK_AAR_AUTH_HEADER }}
+          AAR_SHA256: ${{ secrets.AVAYA_SDK_AAR_SHA256 }}
+          SDK_RELEASE_TAG: ${{ vars.AVAYA_SDK_RELEASE_TAG }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REF_NAME_VALUE: ${{ github.ref_name }}
+          GITHUB_REF_TYPE_VALUE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$AAR_PATH")"
+
+          if [ -s "$AAR_PATH" ]; then
+            echo "Using local $AAR_PATH"
+          elif [ -n "$AAR_URL" ]; then
+            echo "Downloading Avaya SDK AAR from configured AVAYA_SDK_AAR_URL..."
+            if [ -n "$AAR_AUTH_HEADER" ]; then
+              curl -fsSL --proto '=https' --tlsv1.2 -H "$AAR_AUTH_HEADER" -o "$AAR_PATH" "$AAR_URL"
+            else
+              curl -fsSL --proto '=https' --tlsv1.2 -o "$AAR_PATH" "$AAR_URL"
+            fi
+          else
+            TAG="${SDK_RELEASE_TAG:-sdk-4.0.10}"
+            echo "Checking repository release tag '$TAG' for oceanacustomerwebvoicevideo.aar..."
+            if gh release download "$TAG" --pattern "oceanacustomerwebvoicevideo.aar" --dir "$(dirname "$AAR_PATH")" 2>/dev/null; then
+              echo "Downloaded Avaya SDK AAR from release tag '$TAG'"
+            fi
+          fi
+
+          if [ ! -s "$AAR_PATH" ]; then
+            {
+              echo "### Android APK Build Waiting for Proprietary Avaya SDK AAR"
+              echo ""
+              echo "\`oceanacustomerwebvoicevideo.aar\` (Release 4.0.10) is gitignored per the Avaya SDK EULA."
+              echo "Enable automatic APK builds using either option:"
+              echo ""
+              echo "1. **Artifact URL Secret (recommended for public or private repos)**:"
+              echo "   - Add \`AVAYA_SDK_AAR_URL\` (HTTPS URL) in **Settings -> Secrets and variables -> Actions**."
+              echo "   - Optionally add \`AVAYA_SDK_AAR_AUTH_HEADER\` (for authenticated storage) and \`AVAYA_SDK_AAR_SHA256\`."
+              echo "2. **Private Repository Release Asset**:"
+              echo "   - Create a GitHub Release tagged \`sdk-4.0.10\` (or set repository variable \`AVAYA_SDK_RELEASE_TAG\`) and attach \`oceanacustomerwebvoicevideo.aar\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            echo "sdk_ready=false" >> "$GITHUB_OUTPUT"
+            if [ "$GITHUB_REF_TYPE_VALUE" = "tag" ]; then
+              echo "::error::Cannot publish release tag $GITHUB_REF_NAME_VALUE without oceanacustomerwebvoicevideo.aar."
+              exit 1
+            fi
+            echo "::warning::Skipping Gradle APK build because oceanacustomerwebvoicevideo.aar is not configured in CI secrets yet."
+            exit 0
+          fi
+
+          if [ -n "$AAR_SHA256" ]; then
+            echo "${AAR_SHA256}  ${AAR_PATH}" | sha256sum -c -
+          fi
+          echo "sdk_ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup JDK 17
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK 36
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 platform and Build-Tools 36.1.0
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.1.0"
+
+      - name: Setup Gradle cache
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Run unit tests, compile release Kotlin, and build Debug APK
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleDebug compileReleaseKotlin --no-daemon
+
+      - name: Verify Debug APK 16 KB page-size alignment
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        run: |
+          "$ANDROID_HOME/build-tools/36.1.0/zipalign" -c -P 16 -v 4 android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build Release APK (signed when keystore secrets are configured)
+        id: build_release
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        working-directory: android
+        env:
+          IS_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          INPUT_BUILD_RELEASE: ${{ inputs.build_release }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+        run: |
+          set -euo pipefail
+          if [ "$IS_RELEASE_TAG" != "true" ] && [ "$INPUT_BUILD_RELEASE" != "true" ] && [ -z "$KEYSTORE_B64" ]; then
+            echo "Skipping release APK on regular branch push (configure ANDROID_KEYSTORE_BASE64, push a v* tag, or run workflow_dispatch with build_release=true)."
+            exit 0
+          fi
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            export ANDROID_KEYSTORE_PATH="$KEYSTORE_FILE"
+          fi
+          ./gradlew assembleRelease --no-daemon
+          RELEASE_APK="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)"
+          test -n "$RELEASE_APK"
+          "$ANDROID_HOME/build-tools/36.1.0/zipalign" -c -P 16 -v 4 "$RELEASE_APK"
+
+      - name: Remove temporary signing keystore
+        if: always()
+        run: rm -f "${{ runner.temp }}/release.keystore"
+
+      - name: Stage APK artifacts and SHA-256 checksums
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p dist-apks
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist-apks/phincall-debug.apk
+          if [ -d android/app/build/outputs/apk/release ]; then
+            for apk in android/app/build/outputs/apk/release/*.apk; do
+              [ -f "$apk" ] && cp "$apk" "dist-apks/phincall-$(basename "$apk")"
+            done
+          fi
+          (cd dist-apks && sha256sum *.apk > SHA256SUMS.txt)
+          cat dist-apks/SHA256SUMS.txt
+
+      - name: Upload built APK artifacts
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phincall-android-apks
+          path: dist-apks/*
+          retention-days: 30
+
+      - name: Upload Android unit test reports
+        if: always() && steps.resolve_sdk.outputs.sdk_ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-reports
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish GitHub Release on version tags
+        if: steps.resolve_sdk.outputs.sdk_ready == 'true' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist-apks/* --clobber
+          else
+            gh release create "$TAG_NAME" dist-apks/* --title "PhinCall Android $TAG_NAME" --generate-notes
+          fi

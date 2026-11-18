@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:simulator": "node -e \"process.env.TOKEN_PROXY_MODE='simulator'; require('./server.js')\""
+    "start:simulator": "node -e \"process.env.TOKEN_PROXY_MODE='simulator'; require('./server.js')\"",
+    "test": "node test/security.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
