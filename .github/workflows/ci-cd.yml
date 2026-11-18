@@ -102,8 +102,12 @@ jobs:
           AAR_URL: ${{ secrets.AVAYA_SDK_AAR_URL }}
           AAR_AUTH_HEADER: ${{ secrets.AVAYA_SDK_AAR_AUTH_HEADER }}
           AAR_SHA256: ${{ secrets.AVAYA_SDK_AAR_SHA256 }}
+          DEFAULT_AAR_SHA256: "83ed982175f552d4ac7b6b938bd351f7533dc9a97d4c777b3c3e6adc719a3c75"
           SDK_RELEASE_TAG: ${{ vars.AVAYA_SDK_RELEASE_TAG }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_RELEASE_REPO: ${{ vars.AVAYA_SDK_RELEASE_REPO }}
+          SDK_REPO_TOKEN: ${{ secrets.AVAYA_SDK_REPO_TOKEN }}
+          DEFAULT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_REPO: ${{ github.repository }}
           GITHUB_REF_NAME_VALUE: ${{ github.ref_name }}
           GITHUB_REF_TYPE_VALUE: ${{ github.ref_type }}
         run: |
@@ -121,9 +125,11 @@ jobs:
             fi
           else
             TAG="${SDK_RELEASE_TAG:-sdk-4.0.10}"
-            echo "Checking repository release tag '$TAG' for oceanacustomerwebvoicevideo.aar..."
-            if gh release download "$TAG" --pattern "oceanacustomerwebvoicevideo.aar" --dir "$(dirname "$AAR_PATH")" 2>/dev/null; then
-              echo "Downloaded Avaya SDK AAR from release tag '$TAG'"
+            TARGET_REPO="${SDK_RELEASE_REPO:-$CURRENT_REPO}"
+            export GH_TOKEN="${SDK_REPO_TOKEN:-$DEFAULT_GITHUB_TOKEN}"
+            echo "Checking GitHub Release '$TAG' in '$TARGET_REPO' for oceanacustomerwebvoicevideo.aar..."
+            if gh release download "$TAG" --repo "$TARGET_REPO" --pattern "oceanacustomerwebvoicevideo.aar" --dir "$(dirname "$AAR_PATH")" 2>/dev/null; then
+              echo "Downloaded Avaya SDK AAR from release '$TAG' in '$TARGET_REPO'"
             fi
           fi
 
@@ -132,13 +138,16 @@ jobs:
               echo "### Android APK Build Waiting for Proprietary Avaya SDK AAR"
               echo ""
               echo "\`oceanacustomerwebvoicevideo.aar\` (Release 4.0.10) is gitignored per the Avaya SDK EULA."
-              echo "Enable automatic APK builds using either option:"
+              echo "Enable automatic APK builds using one of these options:"
               echo ""
-              echo "1. **Artifact URL Secret (recommended for public or private repos)**:"
-              echo "   - Add \`AVAYA_SDK_AAR_URL\` (HTTPS URL) in **Settings -> Secrets and variables -> Actions**."
-              echo "   - Optionally add \`AVAYA_SDK_AAR_AUTH_HEADER\` (for authenticated storage) and \`AVAYA_SDK_AAR_SHA256\`."
-              echo "2. **Private Repository Release Asset**:"
-              echo "   - Create a GitHub Release tagged \`sdk-4.0.10\` (or set repository variable \`AVAYA_SDK_RELEASE_TAG\`) and attach \`oceanacustomerwebvoicevideo.aar\`."
+              echo "1. **Same Private Repository Release (Option B1)**:"
+              echo "   - Ensure this repository is set to **Private**."
+              echo "   - Create a GitHub Release tagged \`sdk-4.0.10\` (mark as Pre-release) and attach \`oceanacustomerwebvoicevideo.aar\`."
+              echo "2. **Separate Private SDK Repository Release (Option B2, keeps this repo public)**:"
+              echo "   - Create a private repo (for example \`yudikarma/avaya-sdk-private\`) and upload \`oceanacustomerwebvoicevideo.aar\` under release tag \`sdk-4.0.10\`."
+              echo "   - Add repository variable \`AVAYA_SDK_RELEASE_REPO\` and secret \`AVAYA_SDK_REPO_TOKEN\` (fine-grained PAT with Contents: Read on that private repo)."
+              echo "3. **Private HTTPS Artifact URL (Option A)**:"
+              echo "   - Add secret \`AVAYA_SDK_AAR_URL\` (and optional \`AVAYA_SDK_AAR_AUTH_HEADER\`)."
             } >> "$GITHUB_STEP_SUMMARY"
 
             echo "sdk_ready=false" >> "$GITHUB_OUTPUT"
@@ -146,13 +155,12 @@ jobs:
               echo "::error::Cannot publish release tag $GITHUB_REF_NAME_VALUE without oceanacustomerwebvoicevideo.aar."
               exit 1
             fi
-            echo "::warning::Skipping Gradle APK build because oceanacustomerwebvoicevideo.aar is not configured in CI secrets yet."
+            echo "::warning::Skipping Gradle APK build because oceanacustomerwebvoicevideo.aar is not configured in CI yet."
             exit 0
           fi
 
-          if [ -n "$AAR_SHA256" ]; then
-            echo "${AAR_SHA256}  ${AAR_PATH}" | sha256sum -c -
-          fi
+          EXPECTED_SHA256="${AAR_SHA256:-$DEFAULT_AAR_SHA256}"
+          echo "${EXPECTED_SHA256}  ${AAR_PATH}" | sha256sum -c -
           echo "sdk_ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Setup JDK 17

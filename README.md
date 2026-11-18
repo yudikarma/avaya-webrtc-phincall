@@ -107,8 +107,10 @@ Because `oceanacustomerwebvoicevideo.aar` is proprietary and excluded from Git, 
 
 | Secret / Variable | Purpose |
 |---|---|
-| `AVAYA_SDK_AAR_URL` (Secret) | Private HTTPS URL to `oceanacustomerwebvoicevideo.aar` (S3, GCS, Artifactory, Nexus, or private GitHub Release asset API URL). |
+| `AVAYA_SDK_RELEASE_TAG` (Variable, optional) | Release tag hosting `oceanacustomerwebvoicevideo.aar` (defaults to `sdk-4.0.10`). Works automatically with `GITHUB_TOKEN` when this repo is **Private**. |
+| `AVAYA_SDK_RELEASE_REPO` (Variable, optional) | Separate **Private** GitHub repo (e.g. `yudikarma/avaya-sdk-private`) hosting the `sdk-4.0.10` release asset if keeping this repo public. |
+| `AVAYA_SDK_REPO_TOKEN` (Secret, optional) | Fine-grained PAT (`Contents: Read`) required only when using a separate private `AVAYA_SDK_RELEASE_REPO`. |
+| `AVAYA_SDK_AAR_URL` (Secret, optional) | Alternative private HTTPS URL to `oceanacustomerwebvoicevideo.aar` (S3, GCS, Artifactory, Nexus). |
 | `AVAYA_SDK_AAR_AUTH_HEADER` (Secret, optional) | Authorization header passed to `curl` when downloading `AVAYA_SDK_AAR_URL` (e.g. `Authorization: Bearer <token>`). |
-| `AVAYA_SDK_AAR_SHA256` (Secret, optional) | Expected SHA-256 hex digest verified before running Gradle. |
-| `AVAYA_SDK_RELEASE_TAG` (Variable, optional) | For private repositories: release tag containing `oceanacustomerwebvoicevideo.aar` (defaults to `sdk-4.0.10`). |
+| `AVAYA_SDK_AAR_SHA256` (Secret, optional) | Overrides the built-in SHA-256 checksum for `oceanacustomerwebvoicevideo.aar` (Release 4.0.10). |
 | `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` (Secrets, optional) | Base64-encoded release keystore and credentials for signing `assembleRelease` in CI. |
