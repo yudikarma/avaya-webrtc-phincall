@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Debug builds permit enterprise lab user CAs and local emulator loopback cleartext only. -->
+    <!-- Debug builds trust system CAs, bundled res/raw enterprise certs, user CAs, and local emulator loopback cleartext. -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
+            <certificates src="@raw/chain_slpaawgip" />
+            <certificates src="@raw/cxcvoipmvrk" />
+            <certificates src="@raw/cxcvoipmvrk_bni_co_id" />
+            <certificates src="@raw/labdemo_phintraco" />
+            <certificates src="@raw/slipi_ca" />
         </trust-anchors>
     </base-config>
     <domain-config cleartextTrafficPermitted="true">

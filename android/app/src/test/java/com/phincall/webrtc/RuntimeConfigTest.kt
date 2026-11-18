@@ -20,6 +20,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 
 class RuntimeConfigTest {
 
@@ -189,5 +192,42 @@ class RuntimeConfigTest {
         assertTrue(HomeUiState().isCallActionsEnabled)
         assertFalse(HomeUiState(isFetchingToken = true).isCallActionsEnabled)
         assertFalse(HomeUiState(isCallLocked = true).isCallActionsEnabled)
+    }
+
+    @Test
+    fun allRawCertificatesAreValidX509WithoutPrivateKeysAndConfiguredInNetworkSecurityXml() {
+        val rawDir = listOf(File("src/main/res/raw"), File("app/src/main/res/raw")).first { it.isDirectory }
+        val mainXml = listOf(
+            File("src/main/res/xml/network_security_config.xml"),
+            File("app/src/main/res/xml/network_security_config.xml")
+        ).first { it.isFile }.readText()
+        val debugXml = listOf(
+            File("src/debug/res/xml/network_security_config.xml"),
+            File("app/src/debug/res/xml/network_security_config.xml")
+        ).first { it.isFile }.readText()
+
+        assertFalse("Release network_security_config.xml must not trust user CAs", mainXml.contains("src=\"user\""))
+        assertFalse("Release network_security_config.xml must not trust non-cert res/raw media", mainXml.contains("@raw/loading"))
+        assertFalse("Debug network_security_config.xml must not trust non-cert res/raw media", debugXml.contains("@raw/loading"))
+
+        val certFactory = CertificateFactory.getInstance("X.509")
+        val certFiles = rawDir.listFiles { file ->
+            file.isFile && (file.extension.equals("crt", ignoreCase = true) || file.extension.equals("pem", ignoreCase = true))
+        }?.toList().orEmpty()
+
+        assertEquals(5, certFiles.size)
+
+        certFiles.forEach { file ->
+            val content = file.readText()
+            assertFalse("${file.name} must not contain a private key", content.contains("PRIVATE KEY"))
+
+            val parsedCerts = file.inputStream().use { certFactory.generateCertificates(it) }
+            assertTrue("${file.name} must contain at least one X.509 certificate", parsedCerts.isNotEmpty())
+            assertTrue(parsedCerts.all { it is X509Certificate })
+
+            val resRef = "@raw/${file.nameWithoutExtension}"
+            assertTrue("Missing $resRef in main network_security_config.xml", mainXml.contains("src=\"$resRef\""))
+            assertTrue("Missing $resRef in debug network_security_config.xml", debugXml.contains("src=\"$resRef\""))
+        }
     }
 }

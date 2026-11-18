@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Release builds enforce TLS everywhere and trust system CAs only (blocks user-CA MitM). -->
+    <!-- Release builds enforce TLS everywhere, trust system CAs plus bundled res/raw enterprise certs, and block user CAs. -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="@raw/chain_slpaawgip" />
+            <certificates src="@raw/cxcvoipmvrk" />
+            <certificates src="@raw/cxcvoipmvrk_bni_co_id" />
+            <certificates src="@raw/labdemo_phintraco" />
+            <certificates src="@raw/slipi_ca" />
         </trust-anchors>
     </base-config>
 </network-security-config>

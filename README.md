@@ -59,7 +59,7 @@ Every setting from the official Avaya Android Reference Client is persisted per 
 
 ## Repository Layout
 
-- `android/` : Self-contained Kotlin Android Studio project (`compileSdk = 36`, `targetSdk = 36`, `minSdk = 28`, 16 KB aligned `jniLibs`, patched Netty `4.1.119.Final`, release/debug `network_security_config.xml`). Open `android/` directly in Android Studio.
+- `android/` : Self-contained Kotlin Android Studio project (`compileSdk = 36`, `targetSdk = 36`, `minSdk = 28`, 16 KB aligned `jniLibs`, patched Netty `4.1.119.Final`, release/debug `network_security_config.xml` with bundled `res/raw/` enterprise certificates). Open `android/` directly in Android Studio.
 - `token-proxy/` : Zero-dependency hardened Node.js intermediary authentication proxy (`server.js`) with automated security test suite (`npm test`).
 - `.github/workflows/ci-cd.yml` : GitHub Actions CI/CD workflow for security tests, Android unit tests, 16 KB `zipalign` verification, APK artifact uploads, and GitHub Releases on `v*` tags.
 - `DESIGN.md` : Visual system, WCAG AA contrast verification, and layout decisions.

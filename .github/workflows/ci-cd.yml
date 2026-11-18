@@ -79,6 +79,16 @@ jobs:
             echo "Release network_security_config.xml must not trust user-installed CAs"
             exit 1
           fi
+          for cert in android/app/src/main/res/raw/*.crt android/app/src/main/res/raw/*.pem; do
+            [ -e "$cert" ] || continue
+            if grep -q "PRIVATE KEY" "$cert"; then
+              echo "Private key must never be stored in res/raw/: $cert"
+              exit 1
+            fi
+            res_name="$(basename "${cert%.*}")"
+            grep -q "src=\"@raw/${res_name}\"" android/app/src/main/res/xml/network_security_config.xml
+            grep -q "src=\"@raw/${res_name}\"" android/app/src/debug/res/xml/network_security_config.xml
+          done
           if find . -path ./.git -prune -o \( -name "*.aar" -o -name "*.keystore" -o -name "*.jks" \) -print | grep -q .; then
             echo "Proprietary SDK .aar or signing keystore must not be committed to Git"
             exit 1
