@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/stage_dark"
+    android:orientation="vertical">
+
+    <!-- Top Live Status, Timer, and CallQuality Banner -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/dock_dark"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/spacing_md"
+        android:paddingVertical="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/textPlatformMode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/ink_on_dark"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textCallTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text="@string/call_timer_initial"
+                android:textColor="@color/ink_on_dark"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/textInteractionState"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/call_state_idle"
+                android:textColor="@color/ink_on_dark_muted"
+                android:textSize="13sp" />
+
+            <ImageView
+                android:id="@+id/iconCallQuality"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_signal" />
+
+            <TextView
+                android:id="@+id/textCallQuality"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/quality_unknown"
+                android:textColor="@color/ink_on_dark_muted"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textSignallingWarning"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/status_fair_dark"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Main Media Stage (holds Remote + Configurable Local VideoSurfaceView children) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/videoStageContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/stage_dark">
+
+        <com.avaya.ocs.Services.Device.Video.VideoSurfaceView
+            android:id="@+id/remoteVideoSurface"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:videoDirection="Receive"
+            app:videoStyle="Fixed" />
+
+        <!-- Audio-only or Video-disabled status state -->
+        <LinearLayout
+            android:id="@+id/layoutAudioStage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_phincall_mark" />
+
+            <TextView
+                android:id="@+id/textAudioStageTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/audio_only_stage_title"
+                android:textColor="@color/ink_on_dark"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textAudioStageSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="@string/audio_only_stage_hint"
+                android:textColor="@color/ink_on_dark_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textVideoSurfaceMeta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@color/dock_dark"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:textColor="@color/ink_on_dark_muted"
+            android:textSize="11sp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Bottom In-Call Control Dock -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/dock_dark"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/spacing_md"
+        android:paddingTop="12dp"
+        android:paddingBottom="18dp">
+
+        <!-- Video-specific controls row (hidden on audio-only calls) -->
+        <LinearLayout
+            android:id="@+id/rowVideoControls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/buttonMuteVideo"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_mute_video"
+                android:src="@drawable/ic_video_on" />
+
+            <ImageButton
+                android:id="@+id/buttonEnableVideo"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_enable_video"
+                android:src="@drawable/ic_video_stream" />
+
+            <ImageButton
+                android:id="@+id/buttonSwitchCamera"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_switch_camera"
+                android:src="@drawable/ic_switch_camera" />
+        </LinearLayout>
+
+        <!-- Primary voice and call lifecycle controls row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/buttonMuteAudio"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_mute_audio"
+                android:src="@drawable/ic_mic_on" />
+
+            <ImageButton
+                android:id="@+id/buttonAudioDevice"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_audio_route"
+                android:src="@drawable/ic_speaker" />
+
+            <ImageButton
+                android:id="@+id/buttonHold"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_hold_call"
+                android:src="@drawable/ic_hold" />
+
+            <ImageButton
+                android:id="@+id/buttonDtmf"
+                android:layout_width="@dimen/call_control_size"
+                android:layout_height="@dimen/call_control_size"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/bg_dock_control"
+                android:contentDescription="@string/cd_open_dtmf"
+                android:src="@drawable/ic_dtmf" />
+
+            <ImageButton
+                android:id="@+id/buttonHangUp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_hangup_circle"
+                android:contentDescription="@string/cd_hang_up"
+                android:src="@drawable/ic_call_end" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

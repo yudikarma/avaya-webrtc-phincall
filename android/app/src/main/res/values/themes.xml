@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PhinCall" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/crimson_accent</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/slate_navy</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="android:colorBackground">@color/canvas_light</item>
+        <item name="colorSurface">@color/surface_light</item>
+        <item name="colorOnSurface">@color/ink_primary</item>
+        <item name="colorOutline">@color/border_interactive</item>
+        <item name="android:statusBarColor">@color/slate_navy</item>
+        <item name="android:navigationBarColor">@color/canvas_light</item>
+    </style>
+
+    <style name="Theme.PhinCall.InCall" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/crimson_accent</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:colorBackground">@color/stage_dark</item>
+        <item name="colorSurface">@color/dock_dark</item>
+        <item name="colorOnSurface">@color/ink_on_dark</item>
+        <item name="android:statusBarColor">@color/stage_dark</item>
+        <item name="android:navigationBarColor">@color/dock_dark</item>
+    </style>
+
+    <style name="Widget.PhinCall.InputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusTopStart">@dimen/radius_control</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_control</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_control</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_control</item>
+        <item name="boxStrokeColor">@color/border_interactive</item>
+        <item name="hintTextColor">@color/ink_secondary</item>
+    </style>
+</resources>

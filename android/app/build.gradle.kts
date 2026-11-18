@@ -1,0 +1,91 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+android {
+    namespace = "com.phincall.webrtc"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.phincall.webrtc"
+        minSdk = 28
+        targetSdk = 36
+        versionCode = 1
+        versionName = "4.0.10"
+
+        ndk {
+            // Match the 16 KB ELF-aligned native ABIs shipped inside oceanacustomerwebvoicevideo.aar.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    buildTypes {
+        debug {
+            isDebuggable = true
+            isMinifyEnabled = false
+        }
+        release {
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    buildFeatures {
+        viewBinding = true
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    packaging {
+        jniLibs {
+            // Store native .so libraries uncompressed and aligned on 16 KB boundaries (Android 15+ compliance).
+            useLegacyPackaging = false
+        }
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES.txt",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE.txt",
+                "META-INF/NOTICE",
+                "META-INF/LICENSE",
+                "META-INF/DEPENDENCIES",
+                "META-INF/notice.txt",
+                "META-INF/license.txt",
+                "META-INF/dependencies.txt",
+                "META-INF/LGPL2.1"
+            )
+        }
+    }
+}
+
+dependencies {
+    // Avaya WebRTC Connect SDK 4.0.10 (CSDK 605.1.10, Android SDK 36 & 16 KB page aligned)
+    implementation(files("libs/oceanacustomerwebvoicevideo.aar"))
+
+    // Required transitive networking and logging dependencies of oceanacustomerwebvoicevideo.aar
+    implementation("io.netty:netty-all:4.1.17.Final")
+    implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // AndroidX UI, lifecycle, and coroutines
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+}

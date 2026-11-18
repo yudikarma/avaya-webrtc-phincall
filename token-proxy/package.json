@@ -1,0 +1,13 @@
+{
+  "name": "phincall-avaya-token-proxy",
+  "version": "4.0.10",
+  "description": "Intermediary authentication proxy for Avaya Aura Web Gateway (AAWG) csaGuest tokens and static host for the WebRTC reference client.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:simulator": "node -e \"process.env.TOKEN_PROXY_MODE='simulator'; require('./server.js')\""
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

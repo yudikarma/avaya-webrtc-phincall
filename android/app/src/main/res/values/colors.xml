@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Operational light workspace (WCAG AA verified in DESIGN.md) -->
+    <color name="canvas_light">#F6F7F9</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="surface_subtle">#EEF1F5</color>
+    <color name="ink_primary">#111822</color>
+    <color name="ink_secondary">#475569</color>
+    <color name="border_interactive">#7A8594</color>
+    <color name="border_hairline">#D8DEE6</color>
+
+    <!-- Core institutional color and deliberate crimson accent -->
+    <color name="slate_navy">#1B2A41</color>
+    <color name="crimson_accent">#C8102E</color>
+    <color name="crimson_accent_pressed">#A50D26</color>
+
+    <!-- Dark in-call video stage and control dock -->
+    <color name="stage_dark">#0F141B</color>
+    <color name="dock_dark">#1A222D</color>
+    <color name="dock_button_idle">#273344</color>
+    <color name="dock_button_active">#36465C</color>
+    <color name="ink_on_dark">#F8FAFC</color>
+    <color name="ink_on_dark_muted">#B6C2D2</color>
+
+    <!-- Semantic call quality and status tones (always paired with text/icons) -->
+    <color name="status_good_light">#157347</color>
+    <color name="status_fair_light">#8A5000</color>
+    <color name="status_poor_light">#B42318</color>
+    <color name="status_good_dark">#4ADE80</color>
+    <color name="status_fair_dark">#FBBF24</color>
+    <color name="status_poor_dark">#F87171</color>
+    <color name="white">#FFFFFF</color>
+</resources>

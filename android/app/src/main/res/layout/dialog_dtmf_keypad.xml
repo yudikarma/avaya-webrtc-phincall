@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/dock_dark"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/dtmf_title"
+        android:textColor="@color/ink_on_dark"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textDtmfEcho"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="monospace"
+        android:gravity="center"
+        android:minHeight="28dp"
+        android:textColor="@color/ink_on_dark"
+        android:textSize="18sp" />
+
+    <GridLayout
+        android:id="@+id/gridDtmfKeys"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:columnCount="3"
+        android:useDefaultMargins="true" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonCloseDtmf"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="14dp"
+        android:text="@string/dtmf_close"
+        android:textColor="@color/ink_on_dark" />
+</LinearLayout>

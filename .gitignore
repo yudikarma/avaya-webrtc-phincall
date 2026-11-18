@@ -1,0 +1,26 @@
+# Proprietary Avaya WebRTC Connect SDK binaries (excluded per Avaya SDK EULA)
+AvayaWebRTCConnectSDKRelease4.0.10forAndroid/
+android/app/libs/*.aar
+ios/Frameworks/*.xcframework/
+web/vendor/OceanaCustomerWebVoiceVideo.js
+web/vendor/jquery*.js
+
+# Android build artifacts and local SDK path
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+
+# iOS Xcode user data and generated project
+ios/*.xcodeproj/xcuserdata/
+ios/Pods/
+ios/build/
+
+# Token Proxy secrets and TLS keys
+token-proxy/.env
+token-proxy/certs/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhinCall | Avaya WebRTC Connect 4.0.10 Reference Client</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Uncomment after placing Avaya vendor files in web/vendor/ (jQuery >= 3.3.1 required per Guide p. 54):
+  <script src="vendor/jquery-3.7.1.min.js" defer></script>
+  <script src="vendor/OceanaCustomerWebVoiceVideo.js" defer></script>
+  -->
+  <script src="config.js" defer></script>
+  <script src="js/tokenClient.js" defer></script>
+  <script src="js/sdkShim.js" defer></script>
+  <script src="js/avayaClient.js" defer></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main controls</a>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-lockup">
+        <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="2" y="2" width="28" height="28" rx="6" fill="#273A57"></rect>
+          <path d="M9 19V13M14 22V10M19 20V12M24 17V15" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"></path>
+        </svg>
+        <div>
+          <h1 class="brand-title">PhinCall</h1>
+          <p class="brand-subtitle">Avaya WebRTC Connect 4.0.10 Reference Console</p>
+        </div>
+      </div>
+      <div class="header-spec">Oceana / Aura Elite HTML5 Client</div>
+    </div>
+  </header>
+
+  <main id="main-content" class="app-main">
+    <div id="sdk-runtime-banner" class="runtime-banner" role="status" aria-live="polite"></div>
+
+    <div class="console-grid">
+      <!-- Left Primary Workspace: Pre-Call Configuration OR Active In-Call Stage -->
+      <div>
+        <section id="screen-pre-call" aria-labelledby="precall-heading">
+          <div class="panel">
+            <h2 id="precall-heading" class="panel-heading">Contact Center Platform</h2>
+            <div class="platform-switch" role="group" aria-label="Select Avaya platform">
+              <button type="button" id="btn-platform-oceana" class="segment-btn" aria-pressed="true">
+                Avaya Oceana
+              </button>
+              <button type="button" id="btn-platform-elite" class="segment-btn" aria-pressed="false">
+                Avaya Aura Elite
+              </button>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="toggle-simulator-mode">
+              <label for="toggle-simulator-mode">Use Local SDK Simulator when OceanaCustomerWebVoiceVideo.js is not loaded</label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2 class="panel-heading">Server, Gateway, and Intermediary Token Proxy</h2>
+            <p class="panel-helper">
+              The browser requests a single-use csaGuest token from your intermediary proxy and never holds AAWG mTLS certificates.
+            </p>
+
+            <div id="oceana-amc-group">
+              <div class="form-row two-col">
+                <div class="field">
+                  <label for="input-amc-server">AMC Server FQDN (Oceana)</label>
+                  <input id="input-amc-server" type="text" placeholder="amc.contactcenter.example.com" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label for="input-amc-port">AMC Port</label>
+                  <input id="input-amc-port" type="number" min="1" max="65535" value="443">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field">
+                  <label for="input-amc-path">AMC URL Path (optional)</label>
+                  <input id="input-amc-path" type="text" placeholder="Leave blank for default snap-in path" autocomplete="off">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row two-col">
+              <div class="field">
+                <label for="input-aawg-server">AAWG Server FQDN</label>
+                <input id="input-aawg-server" type="text" placeholder="aawg.contactcenter.example.com" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="input-aawg-port">AAWG Port</label>
+                <input id="input-aawg-port" type="number" min="1" max="65535" value="443">
+              </div>
+            </div>
+
+            <div class="form-row even-two">
+              <div class="field">
+                <label for="input-token-endpoint">Intermediary Token Proxy URL</label>
+                <input id="input-token-endpoint" type="text" placeholder="/api/tokens" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="input-token-api-key">Client Proxy Key (optional)</label>
+                <input id="input-token-api-key" type="password" placeholder="Sent in X-Client-Key header" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="checkbox-row">
+              <input type="checkbox" id="input-secure-tls" checked>
+              <label for="input-secure-tls">Use HTTPS / WSS transport for AMC and AAWG</label>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2 class="panel-heading">Caller, Routing Attributes, Screen Pop Context, and Topic</h2>
+
+            <div class="form-row even-two">
+              <div class="field">
+                <label for="input-destination">Destination Number / SIP Address</label>
+                <input id="input-destination" type="text" placeholder="1000" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="input-calling-number">Calling Number (Unique Customer ID)</label>
+                <input id="input-calling-number" type="text" placeholder="Customer phone or account ID" autocomplete="off">
+                <span class="field-hint">Links multi-session history in Customer Journey.</span>
+              </div>
+            </div>
+
+            <div class="form-row even-two">
+              <div class="field">
+                <label for="input-display-name">Caller Display Name</label>
+                <input id="input-display-name" type="text" placeholder="Your Name" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="input-resolution">Video Capture Resolution</label>
+                <select id="input-resolution">
+                  <option value="RESOLUTION_416x240">416 x 240</option>
+                  <option value="RESOLUTION_640x360">640 x 360</option>
+                  <option value="RESOLUTION_848x480">848 x 480</option>
+                  <option value="RESOLUTION_1280x720" selected>1280 x 720 (HD)</option>
+                  <option value="RESOLUTION_1920x1080">1920 x 1080 (Full HD)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="oceana-attributes-group" class="form-row">
+              <div class="field">
+                <label for="input-attributes">Oceana Skill Attributes</label>
+                <input id="input-attributes" type="text" placeholder="Language: English; Service: Sales" autocomplete="off">
+                <span class="field-hint">Format: Key: Value1, Value2; Key2: Value (ignored on Elite).</span>
+              </div>
+            </div>
+
+            <div class="form-row even-two">
+              <div class="field">
+                <label for="input-context">Context ID (Agent Screen Pop)</label>
+                <input id="input-context" type="text" placeholder="ORD-2026-00419" autocomplete="off">
+                <span class="field-hint">Passed via work.setContext() for Prompted Digits Screen Pop.</span>
+              </div>
+              <div class="field">
+                <label for="input-topic">Topic (Customer Journey)</label>
+                <input id="input-topic" type="text" placeholder="billing" autocomplete="off">
+                <span class="field-hint">Passed via work.setTopic() for Workspaces Journey tracking.</span>
+              </div>
+            </div>
+
+            <div id="precall-status-panel" class="status-panel" data-status="idle" role="status" aria-live="polite">
+              <span id="precall-status-text">Configure endpoints above, then select Live Help to start a WebRTC interaction.</span>
+            </div>
+
+            <div class="action-bar">
+              <button type="button" id="btn-live-help-voice" class="btn-secondary">
+                Live Help: Voice Call
+              </button>
+              <button type="button" id="btn-live-help-video" class="btn-primary">
+                Live Help: Video Call
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Active In-Call Screen -->
+        <section id="screen-in-call" class="incall-shell" hidden aria-labelledby="incall-mode-label">
+          <div class="incall-topbar">
+            <div class="incall-meta">
+              <h2 id="incall-mode-label" class="incall-title">OCEANA / VIDEO</h2>
+              <span id="incall-state-badge" class="state-tag" role="status" aria-live="polite">IDLE</span>
+              <span id="incall-timer" class="incall-timer" aria-label="Call duration">00:00</span>
+            </div>
+            <div id="incall-quality-banner" class="quality-banner" data-quality="neutral" role="status" aria-live="polite">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                <path d="M2 20h3v-4H2v4zm5 0h3v-8H7v8zm5 0h3V8h-3v12zm5 0h3V4h-3v16z"></path>
+              </svg>
+              <span id="incall-quality-label">Call Quality: Measuring</span>
+            </div>
+          </div>
+
+          <div id="incall-signalling-alert" class="signalling-alert" hidden role="alert"></div>
+
+          <div id="video-media-stage" class="video-stage">
+            <video id="remote-video-view" class="remote-video" width="640" height="360" autoplay playsinline></video>
+            <!-- Local video MUST carry muted to prevent microphone echo (Guide 4.0.10, p. 58). -->
+            <video id="local-video-view" class="local-video" width="320" height="180" autoplay playsinline muted></video>
+          </div>
+
+          <div id="audio-media-stage" class="audio-stage" hidden>
+            <svg width="42" height="42" viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="2" y="2" width="28" height="28" rx="6" fill="#273A57"></rect>
+              <path d="M9 19V13M14 22V10M19 20V12M24 17V15" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"></path>
+            </svg>
+            <h2 id="audio-stage-title">Active Voice Interaction</h2>
+            <p id="audio-stage-hint">Audio media session is running through WebRTC.</p>
+          </div>
+
+          <div class="control-dock" role="toolbar" aria-label="In-call controls">
+            <button type="button" id="btn-mute-audio" class="dock-btn" aria-pressed="false" data-active="false">
+              <span class="control-label">Mute Mic</span>
+            </button>
+            <button type="button" id="btn-mute-video" class="dock-btn" aria-pressed="false" data-active="false">
+              <span class="control-label">Mute Cam</span>
+            </button>
+            <button type="button" id="btn-enable-video" class="dock-btn" aria-pressed="false" data-active="false">
+              <span class="control-label">Disable Video</span>
+            </button>
+            <button type="button" id="btn-hold-call" class="dock-btn hold-btn" aria-pressed="false" data-active="false">
+              <span class="control-label">Hold Call</span>
+            </button>
+            <button type="button" id="btn-open-dtmf" class="dock-btn">
+              <span class="control-label">DTMF Keypad</span>
+            </button>
+            <button type="button" id="btn-read-diagnostics" class="dock-btn">
+              <span class="control-label">Media Stats</span>
+            </button>
+            <button type="button" id="btn-hang-up" class="dock-btn hangup-btn">
+              <span class="control-label">Hang Up</span>
+            </button>
+          </div>
+
+          <pre id="diagnostics-output" class="diagnostics-pre" hidden></pre>
+        </section>
+      </div>
+
+      <!-- Right Secondary Rail: 4-Step Lifecycle Sequence & Live Event Log -->
+      <aside aria-label="Interaction lifecycle and telemetry">
+        <div class="panel">
+          <h2 class="panel-heading">4-Step Work and Interaction Lifecycle</h2>
+          <ol class="lifecycle-list">
+            <li id="lifecycle-step-1" class="lifecycle-item" data-state="idle">
+              <span class="step-num">1</span>
+              <div>
+                <p class="step-title">Fetch Authorization Token</p>
+                <p id="lifecycle-detail-1" class="step-detail"></p>
+              </div>
+            </li>
+            <li id="lifecycle-step-2" class="lifecycle-item" data-state="idle">
+              <span class="step-num">2</span>
+              <div>
+                <p class="step-title">Initialize SDK Client</p>
+                <p id="lifecycle-detail-2" class="step-detail"></p>
+              </div>
+            </li>
+            <li id="lifecycle-step-3" class="lifecycle-item" data-state="idle">
+              <span class="step-num">3</span>
+              <div>
+                <p class="step-title">Create Work Object</p>
+                <p id="lifecycle-detail-3" class="step-detail"></p>
+              </div>
+            </li>
+            <li id="lifecycle-step-4" class="lifecycle-item" data-state="idle">
+              <span class="step-num">4</span>
+              <div>
+                <p class="step-title">Start Audio / Video Interaction</p>
+                <p id="lifecycle-detail-4" class="step-detail"></p>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <div class="panel">
+          <div class="log-header">
+            <h2 class="panel-heading" style="margin: 0;">Interaction Event Log</h2>
+            <button type="button" id="btn-clear-log" class="btn-link-clear">Clear</button>
+          </div>
+          <p id="event-log-empty" class="log-empty">
+            No SDK events recorded yet. Start a Voice or Video interaction to inspect live callbacks.
+          </p>
+          <ul id="event-log-list" class="log-list" aria-live="polite"></ul>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Accessible DTMF Keypad Modal -->
+  <dialog id="dtmf-dialog" class="dtmf-dialog" aria-labelledby="dtmf-dialog-title">
+    <div class="dtmf-header">
+      <h2 id="dtmf-dialog-title">DTMF Keypad</h2>
+      <button type="button" id="btn-close-dtmf" class="dtmf-close-btn">Close</button>
+    </div>
+    <div id="dtmf-echo-display" class="dtmf-echo" aria-live="polite"></div>
+    <div class="dtmf-grid">
+      <button type="button" class="dtmf-key" data-dtmf-digit="1" aria-label="DTMF 1">1</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="2" aria-label="DTMF 2">2</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="3" aria-label="DTMF 3">3</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="4" aria-label="DTMF 4">4</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="5" aria-label="DTMF 5">5</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="6" aria-label="DTMF 6">6</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="7" aria-label="DTMF 7">7</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="8" aria-label="DTMF 8">8</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="9" aria-label="DTMF 9">9</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="*" aria-label="DTMF star">*</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="0" aria-label="DTMF 0">0</button>
+      <button type="button" class="dtmf-key" data-dtmf-digit="#" aria-label="DTMF pound">#</button>
+    </div>
+  </dialog>
+
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <span>PhinCall Reference Implementation for Avaya WebRTC Connect Release 4.0.10</span>
+      <span>Not for primary emergency calling (Avaya SDK Guide 4.0.10, p. 20)</span>
+    </div>
+  </footer>
+</body>
+</html>

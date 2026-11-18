@@ -1,0 +1,19 @@
+# Optional CocoaPods manifest for integrating Avaya WebRTC Connect 4.0.10 via a local podspec.
+# Place the four XCFrameworks from AvayaWebRTCConnectSDK.zip inside ios/Frameworks/.
+platform :ios, '15.0'
+use_frameworks!
+
+target 'PhinCalliOS' do
+  # Uncomment if packaging the local XCFrameworks through a private Podspec:
+  # pod 'AvayaWebRTCConnectLocal', :path => './Frameworks'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      # Avaya CSDK requires Bitcode disabled and 64-bit architectures (Guide 4.0.10, p. 45).
+      config.build_settings['ENABLE_BITCODE'] = 'NO'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
+  end
+end
