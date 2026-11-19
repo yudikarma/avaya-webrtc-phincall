@@ -1,6 +1,7 @@
 package com.phincall.webrtc
 
 import com.avaya.ocs.Services.Work.Enums.PlatformType
+import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.AmcServerConfig
 import com.phincall.webrtc.config.AttributeEntry
 import com.phincall.webrtc.config.CallHistoryStore
@@ -16,13 +17,19 @@ import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
 import com.phincall.webrtc.ui.home.HomeUiState
 import com.phincall.webrtc.ui.settings.SettingsFormState
+import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import kotlin.concurrent.thread
 
 class RuntimeConfigTest {
 
@@ -229,5 +236,67 @@ class RuntimeConfigTest {
             assertTrue("Missing $resRef in main network_security_config.xml", mainXml.contains("src=\"$resRef\""))
             assertTrue("Missing $resRef in debug network_security_config.xml", debugXml.contains("src=\"$resRef\""))
         }
+    }
+
+    @Test
+    fun tokenRepositorySendsAvayaVendorAcceptHeaderToPreventHttp406AndKeepsTokenInMemory() = runTest {
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        var capturedAccept = ""
+        var capturedContentType = ""
+
+        val serverThread = thread(start = true) {
+            server.use { ss ->
+                ss.accept().use { socket ->
+                    val reader = socket.getInputStream().bufferedReader()
+                    var contentLength = 0
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                        if (line.startsWith("Accept:", ignoreCase = true)) {
+                            capturedAccept = line.substringAfter(":").trim()
+                        } else if (line.startsWith("Content-Type:", ignoreCase = true)) {
+                            capturedContentType = line.substringAfter(":").trim()
+                        } else if (line.startsWith("Content-Length:", ignoreCase = true)) {
+                            contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                        }
+                    }
+                    repeat(contentLength) { reader.read() }
+
+                    val responseJson = "{\"encryptedToken\":\"tok-abc-123\"}"
+                    val out = socket.getOutputStream()
+                    if (capturedAccept.contains("application/vnd.avaya.csa.tokens.v1+json")) {
+                        val headers = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: application/vnd.avaya.csa.tokens.v1+json\r\n" +
+                            "Content-Length: ${responseJson.toByteArray().size}\r\n" +
+                            "Connection: close\r\n\r\n"
+                        out.write((headers + responseJson).toByteArray())
+                    } else {
+                        val err = "HTTP/1.1 406 Not Acceptable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        out.write(err.toByteArray())
+                    }
+                    out.flush()
+                }
+            }
+        }
+
+        val repo = TokenRepository(OkHttpClient.Builder().build())
+        val result = repo.fetchToken(
+            proxyConfig = TokenProxyConfig(
+                serverHost = "127.0.0.1",
+                port = server.localPort,
+                secure = false,
+                path = "token-generation-service/token/getEncryptedToken"
+            ),
+            callerProfile = CallerProfile(destinationNumber = "", callingNumber = "1001", displayName = "Alice")
+        )
+        serverThread.join(5_000)
+
+        assertTrue("Expected Accept to advertise Avaya vendor media type, got: $capturedAccept",
+            capturedAccept.contains("application/vnd.avaya.csa.tokens.v1+json"))
+        assertTrue("Expected Content-Type to advertise Avaya vendor media type, got: $capturedContentType",
+            capturedContentType.contains("application/vnd.avaya.csa.tokens.v1+json"))
+        assertTrue("Expected HTTP 200 success from fetchToken, got: $result", result.isSuccess)
+        assertEquals("tok-abc-123", repo.consumeInMemoryToken())
+        assertNull("Single-use token must clear after consumption", repo.consumeInMemoryToken())
     }
 }

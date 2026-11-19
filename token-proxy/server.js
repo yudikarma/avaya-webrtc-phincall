@@ -258,7 +258,7 @@ function requestAawgToken(payload) {
       method: "POST",
       headers: {
         "Content-Type": AAWG_MEDIA_TYPE,
-        "Accept": "application/json",
+        "Accept": `${AAWG_MEDIA_TYPE}, application/json, */*`,
         "Content-Length": Buffer.byteLength(bodyText)
       },
       timeout: 15000,

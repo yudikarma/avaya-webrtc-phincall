@@ -47,7 +47,7 @@ class TokenRepository(
             val requestBuilder = Request.Builder()
                 .url(endpointUrl)
                 .post(requestBody)
-                .header("Accept", "application/json")
+                .header("Accept", AAWG_ACCEPT_HEADER)
                 .header("Cache-Control", "no-store")
 
             if (proxyConfig.clientApiKey.isNotBlank()) {
@@ -130,6 +130,8 @@ class TokenRepository(
 
     companion object {
         private const val MAX_TOKEN_RESPONSE_CHARS = 32 * 1024
+        private const val AAWG_ACCEPT_HEADER =
+            "application/vnd.avaya.csa.tokens.v1+json, application/json, */*"
         private val AAWG_TOKEN_MEDIA_TYPE = "application/vnd.avaya.csa.tokens.v1+json; charset=utf-8".toMediaType()
 
         private fun buildHardenedHttpClient(): OkHttpClient {
