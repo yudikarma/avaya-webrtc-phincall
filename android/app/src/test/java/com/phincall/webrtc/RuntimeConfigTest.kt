@@ -3,6 +3,7 @@ package com.phincall.webrtc
 import com.avaya.ocs.Services.Work.Enums.PlatformType
 import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.AmcServerConfig
+import com.phincall.webrtc.config.AppMetadata
 import com.phincall.webrtc.config.AttributeEntry
 import com.phincall.webrtc.config.CallHistoryStore
 import com.phincall.webrtc.config.CallMediaMode
@@ -298,5 +299,60 @@ class RuntimeConfigTest {
         assertTrue("Expected HTTP 200 success from fetchToken, got: $result", result.isSuccess)
         assertEquals("tok-abc-123", repo.consumeInMemoryToken())
         assertNull("Single-use token must clear after consumption", repo.consumeInMemoryToken())
+    }
+
+    @Test
+    fun appMetadataFormatsSdkVersionsAndDiagnosticsCleanly() {
+        val info = AppMetadata.create(
+            appVersionName = "4.0.10",
+            appVersionCode = 2,
+            applicationId = "com.phincall.webrtc",
+            buildTypeRaw = "release",
+            androidRelease = "16",
+            deviceApiLevel = 36
+        )
+
+        assertEquals("v4.0.10 (Build 2)", info.formattedAppVersion)
+        assertEquals("Release", info.buildType)
+        assertEquals("4.0.10 (CSDK 605.1.10)", info.formattedAvayaSdk)
+        assertEquals("Android 16 (API 36)", info.formattedDeviceOs)
+        assertEquals("Target API 36 / Min API 28", info.formattedSdkRange)
+
+        val summary = info.formatDiagnosticsSummary("Avaya Oceana")
+        assertTrue(summary.contains("PhinCall v4.0.10 (Build 2) [Release]"))
+        assertTrue(summary.contains("Avaya WebRTC SDK: 4.0.10 (CSDK 605.1.10)"))
+        assertTrue(summary.contains("Active Profile: Avaya Oceana"))
+        assertTrue(summary.contains("Target API 36 / Min API 28"))
+        assertFalse("Diagnostics summary must not contain em dashes", summary.contains("\u2014"))
+    }
+
+    @Test
+    fun videoStageAndLocalSurfaceLayoutsCarryNonNullSizingAndAvayaAttributes() {
+        val layoutDir = listOf(
+            File("app/src/main/res/layout"),
+            File("src/main/res/layout")
+        ).firstOrNull { it.isDirectory }
+        assertTrue("Expected layout directory to exist", layoutDir != null)
+
+        val remoteXml = File(layoutDir!!, "view_remote_video_stage.xml").readText()
+        assertTrue(remoteXml.contains("avayaVideoStageRoot"))
+        assertTrue(remoteXml.contains("android:layout_width=\"match_parent\""))
+        assertTrue(remoteXml.contains("android:layout_height=\"match_parent\""))
+        assertTrue(remoteXml.contains("app:videoDirection=\"Receive\""))
+        assertTrue(remoteXml.contains("app:videoStyle=\"Fixed\""))
+        assertFalse("Stage root must stay transparent to avoid covering GLSurfaceView", remoteXml.contains("@color/stage_dark"))
+
+        listOf(
+            "view_local_video_square.xml",
+            "view_local_video_subtle.xml",
+            "view_local_video_rounded.xml",
+            "view_local_video_deep.xml"
+        ).forEach { fileName ->
+            val xml = File(layoutDir, fileName).readText()
+            assertTrue("$fileName must declare Transmit direction", xml.contains("app:videoDirection=\"Transmit\""))
+            assertTrue("$fileName must declare MovableCorner style", xml.contains("app:videoStyle=\"MovableCorner\""))
+            assertTrue("$fileName must declare explicit layout_width", xml.contains("android:layout_width=\""))
+            assertTrue("$fileName must declare explicit layout_height", xml.contains("android:layout_height=\""))
+        }
     }
 }

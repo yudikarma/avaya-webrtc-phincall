@@ -1,12 +1,5 @@
 package com.phincall.webrtc.ui.incall
 
-import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -54,11 +47,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,21 +56,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.avaya.ocs.Services.Device.Video.Enums.CallQuality
-import com.avaya.ocs.Services.Device.Video.VideoSurfaceView
 import com.avaya.ocs.Services.Work.Enums.AudioDeviceType
-import com.avaya.ocs.Services.Work.Enums.InteractionState
 import com.phincall.webrtc.R
 import com.phincall.webrtc.config.CallMediaMode
 import com.phincall.webrtc.config.InteractionLaunchConfig
@@ -95,157 +79,168 @@ import com.phincall.webrtc.ui.theme.StatusFairLight
 import com.phincall.webrtc.ui.theme.StatusGoodDark
 import com.phincall.webrtc.ui.theme.StatusPoorDark
 import com.phincall.webrtc.ui.theme.TabularMonospaceStyle
-import com.phincall.webrtc.webrtc.ActiveCallForegroundService
 import com.phincall.webrtc.webrtc.CallStateSnapshot
-import kotlinx.coroutines.delay
 import java.util.Locale
 
 @Composable
-fun InCallRoute(
-    viewModel: InCallViewModel,
-    onCallTerminated: () -> Unit
+internal fun InCallTopHud(
+    config: InteractionLaunchConfig?,
+    snapshot: CallStateSnapshot,
+    isOnline: Boolean,
+    localPipMeta: String,
+    onOpenStats: () -> Unit
 ) {
-    val context = LocalContext.current
-    val snapshot by viewModel.callState.collectAsStateWithLifecycle()
-    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
-    val hasStarted by viewModel.hasStarted.collectAsStateWithLifecycle()
-    val startupFailure by viewModel.startupFailure.collectAsStateWithLifecycle()
-    val statsText by viewModel.statsText.collectAsStateWithLifecycle()
+    val isVideoCall = (config?.mediaMode ?: snapshot.mediaMode) == CallMediaMode.VIDEO
+    val platformLabel = "${(config?.platformType ?: snapshot.platformType).name} / ${if (isVideoCall) "VIDEO" else "AUDIO"}"
+    val destSuffix = config?.callerProfile?.destinationNumber?.takeIf { it.isNotBlank() }?.let { " | $it" }.orEmpty()
+    val (qualityText, qualityColor) = resolveQualityIndicator(snapshot.callQuality)
 
-    val config = viewModel.launchConfig
-    val isVideoCall = config?.mediaMode == CallMediaMode.VIDEO
-
-    var showDtmfDialog by remember { mutableStateOf(false) }
-    var showStatsDialog by remember { mutableStateOf(false) }
-    var showAudioSheet by remember { mutableStateOf(false) }
-    var hangupTapped by remember { mutableStateOf(false) }
-    var hasNavigatedOut by remember { mutableStateOf(false) }
-
-    fun exitCallScreen() {
-        if (!hasNavigatedOut) {
-            hasNavigatedOut = true
-            ActiveCallForegroundService.stop(context)
-            onCallTerminated()
-        }
-    }
-
-    // Appendix D: Back gesture triggers safe end() + discard() teardown.
-    BackHandler {
-        hangupTapped = true
-        viewModel.hangUpAndDiscard()
-    }
-
-    // Avaya SDK 4.0.10 background camera restoration / privacy mute lifecycle hooks.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        showDtmfDialog = false
-        showStatsDialog = false
-        showAudioSheet = false
-        viewModel.onBackgrounded()
-    }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        viewModel.onResumed()
-    }
-
-    DisposableEffect(isVideoCall) {
-        if (config != null) {
-            ActiveCallForegroundService.start(context, isVideoCall)
-        }
-        onDispose {
-            ActiveCallForegroundService.stop(context)
-        }
-    }
-
-    // For audio-only interactions, start immediately without waiting for a video surface container.
-    LaunchedEffect(config) {
-        if (config == null || config.mediaMode == CallMediaMode.AUDIO) {
-            viewModel.startInteractionOnce(videoStageContainer = null)
-        }
-    }
-
-    LaunchedEffect(startupFailure) {
-        val failure = startupFailure ?: return@LaunchedEffect
-        Toast.makeText(context, failure, Toast.LENGTH_LONG).show()
-        exitCallScreen()
-    }
-
-    // Return to Home only after Avaya CSDK fires onDiscardComplete() (Appendix D).
-    LaunchedEffect(hasStarted, snapshot.isDiscardCompleted) {
-        if (hasStarted && snapshot.isDiscardCompleted) {
-            if (!snapshot.errorMessage.isNullOrBlank() && snapshot.interactionState == InteractionState.FAILED) {
-                Toast.makeText(context, snapshot.errorMessage, Toast.LENGTH_LONG).show()
+    Surface(
+        color = DockDark,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$platformLabel$destSuffix",
+                    color = InkOnDark,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = formatDuration(snapshot.elapsedMillis),
+                    style = TabularMonospaceStyle.copy(fontSize = 16.sp),
+                    color = InkOnDark,
+                    modifier = Modifier.padding(end = 10.dp)
+                )
+                DockIconButton(
+                    icon = Icons.Rounded.Assessment,
+                    contentDescription = "View live audio and video call statistics",
+                    containerColor = DockButtonIdle,
+                    size = 44.dp,
+                    onClick = onOpenStats
+                )
             }
-            exitCallScreen()
-        }
-    }
 
-    LaunchedEffect(showStatsDialog) {
-        while (showStatsDialog) {
-            viewModel.refreshStatistics()
-            delay(3000L)
-        }
-    }
+            Spacer(Modifier.height(6.dp))
 
-    InCallScreen(
-        config = config,
-        snapshot = snapshot,
-        isOnline = isOnline,
-        hangupDisabled = hangupTapped,
-        onVideoStageReady = { container -> viewModel.startInteractionOnce(container) },
-        onOpenStats = { showStatsDialog = true },
-        onToggleAudioMute = viewModel::toggleAudioMute,
-        onToggleVideoMute = viewModel::toggleVideoMute,
-        onToggleVideoEnabled = viewModel::toggleVideoEnabled,
-        onSwitchCamera = viewModel::switchCamera,
-        onToggleHold = viewModel::toggleHold,
-        onOpenDtmf = { showDtmfDialog = true },
-        onOpenAudioPicker = {
-            if (snapshot.availableAudioDevices.isEmpty()) {
-                Toast.makeText(context, "No alternate audio outputs detected yet.", Toast.LENGTH_SHORT).show()
-            } else {
-                showAudioSheet = true
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = snapshot.interactionState.name,
+                    color = InkOnDarkMuted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Rounded.SignalCellularAlt,
+                    contentDescription = null,
+                    tint = qualityColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = qualityText,
+                    color = qualityColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
-        },
-        onHangUp = {
-            hangupTapped = true
-            viewModel.hangUpAndDiscard()
+
+            if (isVideoCall && localPipMeta.isNotEmpty() && snapshot.isVideoEnabled) {
+                Text(
+                    text = localPipMeta,
+                    color = InkOnDarkMuted,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            val warningBanner = when {
+                !isOnline -> "Network connection lost. Waiting for connectivity to recover signalling."
+                !snapshot.signallingBanner.isNullOrBlank() -> snapshot.signallingBanner
+                else -> null
+            }
+            if (warningBanner != null) {
+                Text(
+                    text = warningBanner,
+                    color = StatusFairDark,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
         }
-    )
-
-    if (showDtmfDialog) {
-        InCallDtmfDialog(
-            onDigitPressed = viewModel::sendDtmf,
-            onDismiss = { showDtmfDialog = false }
-        )
-    }
-
-    if (showStatsDialog) {
-        InCallStatsDialog(
-            statsText = statsText,
-            onDismiss = { showStatsDialog = false }
-        )
-    }
-
-    if (showAudioSheet) {
-        AudioOutputDeviceSheet(
-            devices = snapshot.availableAudioDevices,
-            currentDevice = snapshot.currentAudioDevice,
-            onSelectDevice = { dev ->
-                viewModel.selectAudioDevice(dev)
-                showAudioSheet = false
-            },
-            onDismiss = { showAudioSheet = false }
-        )
     }
 }
 
 @Composable
-private fun InCallScreen(
-    config: InteractionLaunchConfig?,
+internal fun InCallAudioStageFallback(
+    isVideoCall: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(StageDark),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                color = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.size(64.dp)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_phincall_brand),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp)
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = if (isVideoCall) {
+                    "Video stream disabled (audio remains active)"
+                } else {
+                    "Active Voice Interaction"
+                },
+                color = InkOnDark,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Audio is routed through the selected device.",
+                color = InkOnDarkMuted,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+internal fun InCallBottomDock(
+    isVideoCall: Boolean,
     snapshot: CallStateSnapshot,
-    isOnline: Boolean,
     hangupDisabled: Boolean,
-    onVideoStageReady: (ViewGroup) -> Unit,
-    onOpenStats: () -> Unit,
     onToggleAudioMute: () -> Unit,
     onToggleVideoMute: () -> Unit,
     onToggleVideoEnabled: () -> Unit,
@@ -255,293 +250,91 @@ private fun InCallScreen(
     onOpenAudioPicker: () -> Unit,
     onHangUp: () -> Unit
 ) {
-    val isVideoCall = (config?.mediaMode ?: snapshot.mediaMode) == CallMediaMode.VIDEO
-    val platformLabel = "${(config?.platformType ?: snapshot.platformType).name} / ${if (isVideoCall) "VIDEO" else "AUDIO"}"
-    val destSuffix = config?.callerProfile?.destinationNumber?.takeIf { it.isNotBlank() }?.let { " | $it" }.orEmpty()
-    val (qualityText, qualityColor) = resolveQualityIndicator(snapshot.callQuality)
-
-    var localPipMeta by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(StageDark)
+    Surface(
+        color = DockDark,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        // Top HUD with Android 15/16 status-bar and cutout safe area
-        Surface(
-            color = DockDark,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
-                    )
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "$platformLabel$destSuffix",
-                        color = InkOnDark,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = formatDuration(snapshot.elapsedMillis),
-                        style = TabularMonospaceStyle.copy(fontSize = 16.sp),
-                        color = InkOnDark,
-                        modifier = Modifier.padding(end = 10.dp)
-                    )
-                    DockIconButton(
-                        icon = Icons.Rounded.Assessment,
-                        contentDescription = "View live audio and video call statistics",
-                        containerColor = DockButtonIdle,
-                        size = 44.dp,
-                        onClick = onOpenStats
-                    )
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = snapshot.interactionState.name,
-                        color = InkOnDarkMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.SignalCellularAlt,
-                        contentDescription = null,
-                        tint = qualityColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = qualityText,
-                        color = qualityColor,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                val warningBanner = when {
-                    !isOnline -> "Network connection lost. Waiting for connectivity to recover signalling."
-                    !snapshot.signallingBanner.isNullOrBlank() -> snapshot.signallingBanner
-                    else -> null
-                }
-                if (warningBanner != null) {
-                    Text(
-                        text = warningBanner,
-                        color = StatusFairDark,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
-            }
-        }
-
-        // Main Media Stage (Avaya native VideoSurfaceView container + audio fallback overlay)
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .background(StageDark)
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (isVideoCall && config != null) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        val stageRoot = LayoutInflater.from(ctx).inflate(
-                            R.layout.view_remote_video_stage,
-                            null,
-                            false
-                        ) as FrameLayout
-
-                        val preset = config.videoSettings.localSurfacePreset
-                        val localView = LayoutInflater.from(ctx).inflate(
-                            preset.layoutRes,
-                            stageRoot,
-                            false
-                        ) as VideoSurfaceView
-
-                        val marginPx = (16 * ctx.resources.displayMetrics.density).toInt()
-                        val localParams = FrameLayout.LayoutParams(
-                            localView.layoutParams.width,
-                            localView.layoutParams.height,
-                            Gravity.BOTTOM or Gravity.END
-                        ).apply {
-                            marginEnd = marginPx
-                            bottomMargin = marginPx
-                        }
-                        localView.tag = LOCAL_VIDEO_TAG
-                        stageRoot.addView(localView, localParams)
-
-                        localPipMeta = String.format(
-                            Locale.US,
-                            "Local PiP: radius=%d, border=%d",
-                            localView.videoCornerRadius,
-                            localView.videoBorderWidth
-                        )
-
-                        onVideoStageReady(stageRoot)
-                        stageRoot
-                    },
-                    update = { stageRoot ->
-                        val vis = if (snapshot.isVideoEnabled) View.VISIBLE else View.GONE
-                        stageRoot.findViewById<View>(R.id.avayaRemoteVideoSurface)?.visibility = vis
-                        stageRoot.findViewWithTag<View>(LOCAL_VIDEO_TAG)?.visibility = vis
-                    }
-                )
-            }
-
-            if (!isVideoCall || !snapshot.isVideoEnabled) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_phincall_mark),
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = if (isVideoCall) {
-                            "Video stream disabled (audio remains active)"
-                        } else {
-                            "Active Voice Interaction"
-                        },
-                        color = InkOnDark,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Audio is routed through the selected device.",
-                        color = InkOnDarkMuted,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            if (isVideoCall && localPipMeta.isNotEmpty() && snapshot.isVideoEnabled) {
-                Surface(
-                    color = DockDark,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = localPipMeta,
-                        color = InkOnDarkMuted,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
-
-        // Bottom In-Call Control Dock with navigation bar safe area
-        Surface(
-            color = DockDark,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (isVideoCall) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        DockIconButton(
-                            icon = if (snapshot.isVideoMuted) Icons.Rounded.VideocamOff else Icons.Rounded.Videocam,
-                            contentDescription = "Toggle camera mute",
-                            containerColor = if (snapshot.isVideoMuted) CrimsonAccent else DockButtonIdle,
-                            enabled = snapshot.isVideoEnabled,
-                            onClick = onToggleVideoMute
-                        )
-                        DockIconButton(
-                            icon = Icons.Rounded.VideoSettings,
-                            contentDescription = "Enable or disable video stream",
-                            containerColor = if (snapshot.isVideoEnabled) DockButtonIdle else StatusFairLight,
-                            onClick = onToggleVideoEnabled
-                        )
-                        DockIconButton(
-                            icon = Icons.Rounded.Cameraswitch,
-                            contentDescription = "Switch front or rear camera",
-                            containerColor = DockButtonIdle,
-                            enabled = snapshot.isVideoEnabled,
-                            onClick = onSwitchCamera
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                }
-
+            if (isVideoCall) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     DockIconButton(
-                        icon = if (snapshot.isAudioMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                        contentDescription = "Toggle microphone mute",
-                        containerColor = if (snapshot.isAudioMuted) CrimsonAccent else DockButtonIdle,
-                        onClick = onToggleAudioMute
+                        icon = if (snapshot.isVideoMuted) Icons.Rounded.VideocamOff else Icons.Rounded.Videocam,
+                        contentDescription = "Toggle camera mute",
+                        containerColor = if (snapshot.isVideoMuted) CrimsonAccent else DockButtonIdle,
+                        enabled = snapshot.isVideoEnabled,
+                        onClick = onToggleVideoMute
                     )
                     DockIconButton(
-                        icon = Icons.AutoMirrored.Rounded.VolumeUp,
-                        contentDescription = "Select audio output device",
+                        icon = Icons.Rounded.VideoSettings,
+                        contentDescription = "Enable or disable video stream",
+                        containerColor = if (snapshot.isVideoEnabled) DockButtonIdle else StatusFairLight,
+                        onClick = onToggleVideoEnabled
+                    )
+                    DockIconButton(
+                        icon = Icons.Rounded.Cameraswitch,
+                        contentDescription = "Switch front or rear camera",
                         containerColor = DockButtonIdle,
-                        onClick = onOpenAudioPicker
+                        enabled = snapshot.isVideoEnabled,
+                        onClick = onSwitchCamera
                     )
-                    DockIconButton(
-                        icon = Icons.Rounded.Pause,
-                        contentDescription = "Hold or resume call",
-                        containerColor = if (snapshot.isHeldLocally) StatusFairLight else DockButtonIdle,
-                        enabled = !snapshot.isHeldRemotely,
-                        onClick = onToggleHold
-                    )
-                    DockIconButton(
-                        icon = Icons.Rounded.Dialpad,
-                        contentDescription = "Open DTMF keypad",
-                        containerColor = DockButtonIdle,
-                        onClick = onOpenDtmf
-                    )
-                    Surface(
-                        onClick = onHangUp,
-                        enabled = !hangupDisabled,
-                        shape = CircleShape,
-                        color = CrimsonAccent,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .alpha(if (hangupDisabled) 0.5f else 1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Rounded.CallEnd,
-                                contentDescription = "End call",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DockIconButton(
+                    icon = if (snapshot.isAudioMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                    contentDescription = "Toggle microphone mute",
+                    containerColor = if (snapshot.isAudioMuted) CrimsonAccent else DockButtonIdle,
+                    onClick = onToggleAudioMute
+                )
+                DockIconButton(
+                    icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                    contentDescription = "Select audio output device",
+                    containerColor = DockButtonIdle,
+                    onClick = onOpenAudioPicker
+                )
+                DockIconButton(
+                    icon = Icons.Rounded.Pause,
+                    contentDescription = "Hold or resume call",
+                    containerColor = if (snapshot.isHeldLocally) StatusFairLight else DockButtonIdle,
+                    enabled = !snapshot.isHeldRemotely,
+                    onClick = onToggleHold
+                )
+                DockIconButton(
+                    icon = Icons.Rounded.Dialpad,
+                    contentDescription = "Open DTMF keypad",
+                    containerColor = DockButtonIdle,
+                    onClick = onOpenDtmf
+                )
+                Surface(
+                    onClick = onHangUp,
+                    enabled = !hangupDisabled,
+                    shape = CircleShape,
+                    color = CrimsonAccent,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .alpha(if (hangupDisabled) 0.5f else 1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.CallEnd,
+                            contentDescription = "End call",
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
                 }
             }
@@ -555,7 +348,7 @@ private fun DockIconButton(
     contentDescription: String,
     containerColor: Color,
     enabled: Boolean = true,
-    size: androidx.compose.ui.unit.Dp = 52.dp,
+    size: Dp = 52.dp,
     onClick: () -> Unit
 ) {
     Surface(
@@ -579,7 +372,7 @@ private fun DockIconButton(
 }
 
 @Composable
-private fun InCallDtmfDialog(
+internal fun InCallDtmfDialog(
     onDigitPressed: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -645,7 +438,7 @@ private fun InCallDtmfDialog(
 }
 
 @Composable
-private fun InCallStatsDialog(
+internal fun InCallStatsDialog(
     statsText: String,
     onDismiss: () -> Unit
 ) {
@@ -675,7 +468,7 @@ private fun InCallStatsDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AudioOutputDeviceSheet(
+internal fun AudioOutputDeviceSheet(
     devices: List<AudioDeviceType>,
     currentDevice: AudioDeviceType?,
     onSelectDevice: (AudioDeviceType) -> Unit,
@@ -749,5 +542,3 @@ private fun formatDuration(elapsedMs: Long): String {
     val seconds = totalSeconds % 60L
     return String.format(Locale.US, "%02d:%02d", minutes, seconds)
 }
-
-private const val LOCAL_VIDEO_TAG = "avaya_local_video_surface"

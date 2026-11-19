@@ -16,8 +16,8 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.phincall.webrtc.MainActivity
 import com.phincall.webrtc.R
+import com.phincall.webrtc.ui.incall.InCallActivity
 
 /**
  * Keeps WebRTC media active when the screen locks or the app moves to the background.
@@ -77,8 +77,8 @@ class ActiveCallForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun buildNotification(): Notification {
-        val returnIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val returnIntent = Intent(this, InCallActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         val pendingIntent = PendingIntent.getActivity(
             this,

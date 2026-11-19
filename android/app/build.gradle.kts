@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -26,10 +27,20 @@ android {
         }
     }
 
-    val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
-    val keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
-    val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-    val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+    val keystoreProps = Properties().apply {
+        val propsFile = rootProject.file("keystore.properties")
+        if (propsFile.isFile) {
+            propsFile.inputStream().use(::load)
+        }
+    }
+    fun resolveSigningProp(envName: String, propName: String): String? =
+        System.getenv(envName)?.takeIf { it.isNotBlank() }
+            ?: keystoreProps.getProperty(propName)?.takeIf { it.isNotBlank() }
+
+    val keystorePath = resolveSigningProp("ANDROID_KEYSTORE_PATH", "storeFile")
+    val keystorePassword = resolveSigningProp("ANDROID_KEYSTORE_PASSWORD", "storePassword")
+    val releaseKeyAlias = resolveSigningProp("ANDROID_KEY_ALIAS", "keyAlias")
+    val releaseKeyPassword = resolveSigningProp("ANDROID_KEY_PASSWORD", "keyPassword")
     val hasReleaseSigning = keystorePath != null &&
         keystorePassword != null &&
         releaseKeyAlias != null &&
@@ -38,7 +49,7 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystorePath!!)
+                storeFile = rootProject.file(keystorePath!!)
                 storePassword = keystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword

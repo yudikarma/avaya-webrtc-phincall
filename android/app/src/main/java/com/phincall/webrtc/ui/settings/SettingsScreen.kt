@@ -4,7 +4,9 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +33,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
@@ -55,11 +60,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -71,11 +78,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.avaya.ocs.Services.Device.Video.Enums.VideoCaptureOrientation
 import com.avaya.ocs.Services.Device.Video.Enums.VideoCapturePreference
 import com.avaya.ocs.Services.Work.Enums.PlatformType
+import com.phincall.webrtc.R
+import com.phincall.webrtc.config.AppMetadata
 import com.phincall.webrtc.config.LocalVideoSurfacePreset
 import com.phincall.webrtc.config.RoutingStrategyOption
 import com.phincall.webrtc.ui.theme.BorderHairline
 import com.phincall.webrtc.ui.theme.BorderInteractive
 import com.phincall.webrtc.ui.theme.CanvasLight
+import com.phincall.webrtc.ui.theme.CrimsonAccent
 import com.phincall.webrtc.ui.theme.InkOnDarkMuted
 import com.phincall.webrtc.ui.theme.InkPrimary
 import com.phincall.webrtc.ui.theme.InkSecondary
@@ -147,6 +157,9 @@ fun SettingsScreen(
 ) {
     val isOceana = state.platformType == PlatformType.OCEANA
     var apiKeyVisible by remember { mutableStateOf(false) }
+    var showAboutDialog by rememberSaveable { mutableStateOf(false) }
+    val appMetadata = remember { AppMetadata.current() }
+    val activeProfileLabel = if (isOceana) "Avaya Oceana" else "Avaya Aura Elite"
 
     Scaffold(
         containerColor = CanvasLight,
@@ -189,6 +202,16 @@ fun SettingsScreen(
                             fontSize = 12.sp
                         )
                     }
+                    IconButton(
+                        onClick = { showAboutDialog = true },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = "About PhinCall",
+                            tint = Color.White
+                        )
+                    }
                     OutlinedButton(
                         onClick = onResetDefaults,
                         border = BorderStroke(1.dp, InkOnDarkMuted),
@@ -224,10 +247,16 @@ fun SettingsScreen(
                             .height(52.dp),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = SlateNavy,
+                            containerColor = CrimsonAccent,
                             contentColor = Color.White
                         )
                     ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             text = "Save and Apply Runtime Config",
                             fontSize = 15.sp,
@@ -581,9 +610,67 @@ fun SettingsScreen(
                     }
                 }
 
+                // Application and SDK Information Card
+                Surface(
+                    color = SurfaceLight,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAboutDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = Color.White,
+                            shape = RoundedCornerShape(9.dp),
+                            border = BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_phincall_brand),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(3.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "About ${appMetadata.appName}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = InkPrimary
+                            )
+                            Text(
+                                text = "${appMetadata.formattedAppVersion} | Avaya SDK ${appMetadata.avayaSdkVersion}",
+                                color = InkSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = "Open About dialog",
+                            tint = SlateNavy
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(12.dp))
             }
         }
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(
+            metadata = appMetadata,
+            activeProfileLabel = activeProfileLabel,
+            onDismiss = { showAboutDialog = false }
+        )
     }
 }
 

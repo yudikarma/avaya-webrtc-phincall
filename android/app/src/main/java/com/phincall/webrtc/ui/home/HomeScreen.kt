@@ -414,11 +414,19 @@ private fun HomeTopBar(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_phincall_mark),
-                contentDescription = null,
-                modifier = Modifier.size(30.dp)
-            )
+            Surface(
+                color = Color.White,
+                shape = RoundedCornerShape(9.dp),
+                modifier = Modifier.size(34.dp)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_phincall_brand),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(3.dp)
+                )
+            }
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

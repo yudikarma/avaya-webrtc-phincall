@@ -80,6 +80,13 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug compileReleaseKotlin
 ```
 
+To build a signed release APK locally, copy `android/keystore.properties.example` to `android/keystore.properties` (or set the `ANDROID_KEYSTORE_*` environment variables used in CI) and run:
+
+```bash
+cd android
+./gradlew assembleRelease
+```
+
 ### 3. Run and Test the Intermediary Token Proxy
 
 Run the automated security verification suite:

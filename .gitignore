@@ -17,9 +17,13 @@ build/
 .idea/
 local.properties
 
-# Android signing keystores
+# Android signing keystores and local properties
 *.jks
 *.keystore
+*.p12
+*.pfx
+android/keystore/
+android/keystore.properties
 
 # Token Proxy secrets and TLS keys
 token-proxy/.env

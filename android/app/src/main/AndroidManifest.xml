@@ -56,6 +56,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.incall.InCallActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:launchMode="singleTop" />
+
         <service
             android:name=".webrtc.ActiveCallForegroundService"
             android:exported="false"

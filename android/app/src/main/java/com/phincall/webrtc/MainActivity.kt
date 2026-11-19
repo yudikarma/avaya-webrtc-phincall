@@ -34,23 +34,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        applySystemBarAppearance(darkNavBar = false)
+        applySystemBarAppearance(darkStatusBar = false, darkNavBar = false)
 
         setContent {
             PhinCallTheme {
                 PhinCallNavHost(
-                    onUpdateWindowFlags = { secureScreen, keepScreenOn, darkNavBar ->
+                    onUpdateWindowFlags = { secureScreen, keepScreenOn, darkStatusBar, darkNavBar ->
                         updateWindowSecurity(secureScreen, keepScreenOn)
-                        applySystemBarAppearance(darkNavBar)
+                        applySystemBarAppearance(darkStatusBar, darkNavBar)
                     }
                 )
             }
         }
     }
 
-    private fun applySystemBarAppearance(darkNavBar: Boolean) {
-        // Dark Slate Navy / Stage Dark top bar always pairs with light status bar icons.
-        val statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+    private fun applySystemBarAppearance(darkStatusBar: Boolean, darkNavBar: Boolean) {
+        val statusBarStyle = if (darkStatusBar) {
+            SystemBarStyle.dark(Color.TRANSPARENT)
+        } else {
+            SystemBarStyle.light(Color.TRANSPARENT, Color.argb(0x80, 0x11, 0x18, 0x22))
+        }
         val navBarStyle = if (darkNavBar) {
             SystemBarStyle.dark(Color.TRANSPARENT)
         } else {

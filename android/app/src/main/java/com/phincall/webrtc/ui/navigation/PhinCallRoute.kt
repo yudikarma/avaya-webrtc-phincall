@@ -8,11 +8,11 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface PhinCallRoute {
     @Serializable
+    data object Splash : PhinCallRoute
+
+    @Serializable
     data object Home : PhinCallRoute
 
     @Serializable
     data object Settings : PhinCallRoute
-
-    @Serializable
-    data object InCall : PhinCallRoute
 }

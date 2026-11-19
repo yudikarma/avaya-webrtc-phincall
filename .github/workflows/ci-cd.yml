@@ -89,8 +89,8 @@ jobs:
             grep -q "src=\"@raw/${res_name}\"" android/app/src/main/res/xml/network_security_config.xml
             grep -q "src=\"@raw/${res_name}\"" android/app/src/debug/res/xml/network_security_config.xml
           done
-          if find . -path ./.git -prune -o \( -name "*.aar" -o -name "*.keystore" -o -name "*.jks" \) -print | grep -q .; then
-            echo "Proprietary SDK .aar or signing keystore must not be committed to Git"
+          if find . -path ./.git -prune -o \( -name "*.aar" -o -name "*.keystore" -o -name "*.jks" -o -name "*.p12" -o -name "*.pfx" -o -name "keystore.properties" \) -print | grep -q .; then
+            echo "Proprietary SDK .aar or signing keystore/credentials must not be committed to Git"
             exit 1
           fi
 
