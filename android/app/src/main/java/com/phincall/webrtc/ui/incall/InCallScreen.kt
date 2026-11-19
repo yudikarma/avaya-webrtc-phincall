@@ -46,6 +46,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -474,8 +475,14 @@ internal fun AudioOutputDeviceSheet(
     onSelectDevice: (AudioDeviceType) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val safeDevices = remember(devices) {
+        (devices as Iterable<*>).filterIsInstance<AudioDeviceType>().distinct()
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = DockDark,
         contentColor = InkOnDark
     ) {
@@ -491,7 +498,7 @@ internal fun AudioOutputDeviceSheet(
                 color = InkOnDark,
                 modifier = Modifier.padding(bottom = 10.dp)
             )
-            devices.forEach { device ->
+            safeDevices.forEach { device ->
                 val label = when (device) {
                     AudioDeviceType.SPEAKER -> "Speakerphone"
                     AudioDeviceType.HANDSET -> "Earpiece"

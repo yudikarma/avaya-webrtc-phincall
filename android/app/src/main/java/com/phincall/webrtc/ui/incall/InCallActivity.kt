@@ -278,8 +278,10 @@ class InCallActivity : ComponentActivity() {
                             devices = snapshot.availableAudioDevices,
                             currentDevice = snapshot.currentAudioDevice,
                             onSelectDevice = { device ->
-                                viewModel.selectAudioDevice(device)
                                 showAudioSheet = false
+                                rootLayout.post {
+                                    viewModel.selectAudioDevice(device)
+                                }
                             },
                             onDismiss = { showAudioSheet = false }
                         )

@@ -1,5 +1,6 @@
 package com.phincall.webrtc
 
+import com.avaya.ocs.Services.Work.Enums.AudioDeviceType
 import com.avaya.ocs.Services.Work.Enums.PlatformType
 import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.AmcServerConfig
@@ -18,6 +19,7 @@ import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
 import com.phincall.webrtc.ui.home.HomeUiState
 import com.phincall.webrtc.ui.settings.SettingsFormState
+import com.phincall.webrtc.webrtc.InteractionCoordinator
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -353,6 +355,45 @@ class RuntimeConfigTest {
             assertTrue("$fileName must declare MovableCorner style", xml.contains("app:videoStyle=\"MovableCorner\""))
             assertTrue("$fileName must declare explicit layout_width", xml.contains("android:layout_width=\""))
             assertTrue("$fileName must declare explicit layout_height", xml.contains("android:layout_height=\""))
+        }
+    }
+
+    @Test
+    fun sanitizeAudioDeviceListDropsNullsAndDuplicatesAndManifestDeclaresBluetoothPermissions() {
+        val raw = mutableListOf<AudioDeviceType?>(
+            AudioDeviceType.BLUETOOTH_HEADSET,
+            null,
+            AudioDeviceType.SPEAKER,
+            AudioDeviceType.BLUETOOTH_HEADSET,
+            AudioDeviceType.HANDSET,
+            null
+        )
+        val sanitized = InteractionCoordinator.sanitizeAudioDeviceList(raw)
+        assertEquals(
+            listOf(
+                AudioDeviceType.BLUETOOTH_HEADSET,
+                AudioDeviceType.SPEAKER,
+                AudioDeviceType.HANDSET
+            ),
+            sanitized
+        )
+        assertTrue(InteractionCoordinator.sanitizeAudioDeviceList(null).isEmpty())
+
+        val manifestFile = listOf(
+            File("app/src/main/AndroidManifest.xml"),
+            File("src/main/AndroidManifest.xml")
+        ).firstOrNull { it.isFile }
+        assertTrue("Expected AndroidManifest.xml to exist", manifestFile != null)
+        val manifest = manifestFile!!.readText()
+        listOf(
+            "android.permission.BLUETOOTH",
+            "android.permission.BLUETOOTH_ADMIN",
+            "android.permission.BLUETOOTH_CONNECT",
+            "android.permission.BLUETOOTH_SCAN",
+            "android.permission.READ_PHONE_STATE",
+            "android.permission.MODIFY_AUDIO_SETTINGS"
+        ).forEach { perm ->
+            assertTrue("Manifest must declare $perm", manifest.contains(perm))
         }
     }
 }
