@@ -24,6 +24,13 @@ class SettingsStore(context: Context) {
         prefs.edit().putString(KEY_LAST_PLATFORM, platformType.name).apply()
     }
 
+    fun loadAllowScreenCapture(): Boolean =
+        prefs.getBoolean(KEY_ALLOW_SCREEN_CAPTURE, false)
+
+    fun saveAllowScreenCapture(allow: Boolean) {
+        prefs.edit().putBoolean(KEY_ALLOW_SCREEN_CAPTURE, allow).apply()
+    }
+
     fun load(platformType: PlatformType): InteractionLaunchConfig {
         val defaults = SampleConfigurations.defaultFor(platformType)
         val p = prefixFor(platformType)
@@ -173,5 +180,6 @@ class SettingsStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "phincall_avaya_settings"
         private const val KEY_LAST_PLATFORM = "last_platform"
+        private const val KEY_ALLOW_SCREEN_CAPTURE = "allow_screen_capture"
     }
 }

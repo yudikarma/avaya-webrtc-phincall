@@ -27,6 +27,9 @@ class RuntimeConfigManager(
     private val _activeConfig = MutableStateFlow(loadPlatformWithApiKey(settingsStore.loadLastPlatform()))
     val activeConfig: StateFlow<InteractionLaunchConfig> = _activeConfig.asStateFlow()
 
+    private val _allowScreenCapture = MutableStateFlow(settingsStore.loadAllowScreenCapture())
+    val allowScreenCapture: StateFlow<Boolean> = _allowScreenCapture.asStateFlow()
+
     init {
         diagnosticLogManager.configure(_activeConfig.value.loggingConfig)
     }
@@ -49,10 +52,23 @@ class RuntimeConfigManager(
         diagnosticLogManager.configure(config.loggingConfig)
     }
 
+    fun setAllowScreenCapture(allow: Boolean) {
+        val changed = _allowScreenCapture.value != allow
+        settingsStore.saveAllowScreenCapture(allow)
+        _allowScreenCapture.value = allow
+        if (changed) {
+            diagnosticLogManager.recordEvent(
+                "RuntimeConfigManager",
+                "Screen capture policy -> ${if (allow) "ALLOWED" else "BLOCKED"}"
+            )
+        }
+    }
+
     fun resetPlatformToDefaults(platformType: PlatformType): InteractionLaunchConfig {
         val defaults = SampleConfigurations.defaultFor(platformType)
         inMemoryApiKeys.remove(platformType)
         settingsStore.save(defaults)
+        setAllowScreenCapture(false)
         _activeConfig.value = defaults
         diagnosticLogManager.configure(defaults.loggingConfig)
         return defaults

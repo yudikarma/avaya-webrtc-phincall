@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.RuntimeConfigManager
+import com.phincall.webrtc.platform.applyCapturePolicy
 import com.phincall.webrtc.ui.navigation.PhinCallNavHost
 import com.phincall.webrtc.ui.theme.PhinCallTheme
 import com.phincall.webrtc.webrtc.ActiveCallForegroundService
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySystemBarAppearance(darkStatusBar = false, darkNavBar = false)
+        window.applyCapturePolicy(runtimeConfigManager.allowScreenCapture.value)
 
         setContent {
             PhinCallTheme {
@@ -63,11 +65,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updateWindowSecurity(secureScreen: Boolean, keepScreenOn: Boolean) {
-        if (secureScreen) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        window.applyCapturePolicy(!secureScreen)
         if (keepScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {

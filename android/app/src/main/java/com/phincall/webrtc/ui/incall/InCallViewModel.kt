@@ -2,31 +2,30 @@ package com.phincall.webrtc.ui.incall
 
 import android.view.ViewGroup
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.avaya.ocs.Services.Work.Enums.AudioDeviceType
 import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.InteractionLaunchConfig
+import com.phincall.webrtc.config.RuntimeConfigManager
 import com.phincall.webrtc.platform.NetworkMonitor
 import com.phincall.webrtc.webrtc.CallStateSnapshot
 import com.phincall.webrtc.webrtc.InteractionCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class InCallViewModel @Inject constructor(
     private val interactionCoordinator: InteractionCoordinator,
     private val tokenRepository: TokenRepository,
+    runtimeConfigManager: RuntimeConfigManager,
     networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     val launchConfig: InteractionLaunchConfig? = interactionCoordinator.currentLaunchConfig
     val callState: StateFlow<CallStateSnapshot> = interactionCoordinator.state
+    val allowScreenCapture: StateFlow<Boolean> = runtimeConfigManager.allowScreenCapture
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
     private val _hasStarted = MutableStateFlow(false)

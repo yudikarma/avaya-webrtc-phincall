@@ -132,6 +132,7 @@ fun SettingsRoute(
         onSwitchPlatform = viewModel::switchPlatform,
         onResetDefaults = viewModel::resetCurrentPlatform,
         onUpdateForm = viewModel::updateForm,
+        onToggleScreenCapture = viewModel::updateAllowScreenCapture,
         onSendLogs = {
             val intent = viewModel.createSendLogsIntent()
             if (intent != null) {
@@ -156,7 +157,10 @@ fun SettingsScreen(
     onUpdateForm: ((SettingsFormState) -> SettingsFormState) -> Unit,
     onSendLogs: () -> Unit,
     onSaveAndApply: () -> Unit,
-    includeTopSafeArea: Boolean = true
+    includeTopSafeArea: Boolean = true,
+    onToggleScreenCapture: (Boolean) -> Unit = { allow ->
+        onUpdateForm { it.copy(allowScreenCapture = allow) }
+    }
 ) {
     val isOceana = state.platformType == PlatformType.OCEANA
     var apiKeyVisible by remember { mutableStateOf(false) }
@@ -570,6 +574,20 @@ fun SettingsScreen(
                     )
                 }
 
+                // Security and Screen Capture
+                SettingsCard(title = "Security and Screen Capture") {
+                    SettingsSwitchRow(
+                        label = "Allow screen capture and screenshots",
+                        checked = state.allowScreenCapture,
+                        onCheckedChange = onToggleScreenCapture,
+                        subtitle = if (state.allowScreenCapture) {
+                            "Allowed at runtime: screenshots, screen recording, and Recents previews are permitted across app and active call screens."
+                        } else {
+                            "Blocked via FLAG_SECURE: screenshots, screen recording, and Recents previews are disabled across app and active call screens."
+                        }
+                    )
+                }
+
                 // Logging and Support
                 SettingsCard(title = "Logging and Support") {
                     SettingsSwitchRow(
@@ -751,7 +769,8 @@ private fun AttributePairRow(
 private fun SettingsSwitchRow(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -759,12 +778,25 @@ private fun SettingsSwitchRow(
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = InkPrimary,
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = InkPrimary
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = InkSecondary
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange

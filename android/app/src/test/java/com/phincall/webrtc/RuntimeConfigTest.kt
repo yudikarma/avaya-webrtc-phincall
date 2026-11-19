@@ -18,6 +18,7 @@ import com.phincall.webrtc.config.RuntimeConfigManager
 import com.phincall.webrtc.config.SampleConfigurations
 import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
+import com.phincall.webrtc.platform.shouldApplySecureWindowFlag
 import com.phincall.webrtc.ui.home.HomeUiState
 import com.phincall.webrtc.ui.navigation.formatActiveCallDuration
 import com.phincall.webrtc.ui.navigation.shouldShowActiveCallStickyBanner
@@ -438,5 +439,21 @@ class RuntimeConfigTest {
         assertEquals("00:09", formatActiveCallDuration(9_500L))
         assertEquals("01:15", formatActiveCallDuration(75_000L))
         assertEquals("1:01:01", formatActiveCallDuration(3_661_000L))
+    }
+
+    @Test
+    fun runtimeCapturePolicyControlsSecureFlagAndSettingsFormState() {
+        assertTrue(shouldApplySecureWindowFlag(allowScreenCapture = false))
+        assertFalse(shouldApplySecureWindowFlag(allowScreenCapture = true))
+
+        val oceanaConfig = SampleConfigurations.defaultFor(PlatformType.OCEANA)
+        val defaultForm = SettingsFormState.fromLaunchConfig(oceanaConfig)
+        assertFalse(defaultForm.allowScreenCapture)
+
+        val allowedForm = SettingsFormState.fromLaunchConfig(
+            config = oceanaConfig,
+            allowScreenCapture = true
+        )
+        assertTrue(allowedForm.allowScreenCapture)
     }
 }

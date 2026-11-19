@@ -33,6 +33,7 @@ import com.avaya.ocs.Services.Work.Enums.InteractionState
 import com.phincall.webrtc.MainActivity
 import com.phincall.webrtc.R
 import com.phincall.webrtc.config.CallMediaMode
+import com.phincall.webrtc.platform.applyCapturePolicy
 import com.phincall.webrtc.ui.theme.PhinCallTheme
 import com.phincall.webrtc.webrtc.ActiveCallForegroundService
 import dagger.hilt.android.AndroidEntryPoint
@@ -68,8 +69,8 @@ class InCallActivity : ComponentActivity() {
 
         val darkStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = darkStyle, navigationBarStyle = darkStyle)
-        // Protect active calls, audio/video streams, and DTMF input from screenshots or Recents capture.
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Follow runtime Settings capture policy (blocks screenshots / Recents by default when disabled).
+        window.applyCapturePolicy(viewModel.allowScreenCapture.value)
         window.setBackgroundDrawable(ColorDrawable(STAGE_DARK_ARGB))
 
         val config = viewModel.launchConfig
@@ -283,6 +284,12 @@ class InCallActivity : ComponentActivity() {
                     localVideoSurface?.visibility = videoVisibility
                     fallbackOverlayView?.visibility = if (showVideo) View.GONE else View.VISIBLE
                 }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.allowScreenCapture.collect { allowCapture ->
+                window.applyCapturePolicy(allowCapture)
             }
         }
 

@@ -56,6 +56,7 @@ data class SettingsFormState(
     val logToDevice: Boolean = false,
     val logFileName: String = SampleConfigurations.DEFAULT_LOG_FILE_NAME,
     val supportEmail: String = "",
+    val allowScreenCapture: Boolean = false,
     val feedbackMessage: String? = null,
     val isFeedbackError: Boolean = false
 ) {
@@ -127,7 +128,10 @@ data class SettingsFormState(
     }
 
     companion object {
-        fun fromLaunchConfig(config: InteractionLaunchConfig): SettingsFormState {
+        fun fromLaunchConfig(
+            config: InteractionLaunchConfig,
+            allowScreenCapture: Boolean = false
+        ): SettingsFormState {
             val attrs = config.routingMetadata.attributes
             return SettingsFormState(
                 platformType = config.platformType,
@@ -166,7 +170,8 @@ data class SettingsFormState(
                 muteVideoOnBackground = config.videoSettings.muteVideoWhenBackgrounded,
                 logToDevice = config.loggingConfig.logToDevice,
                 logFileName = config.loggingConfig.logFileName,
-                supportEmail = config.loggingConfig.supportEmail
+                supportEmail = config.loggingConfig.supportEmail,
+                allowScreenCapture = allowScreenCapture
             )
         }
     }

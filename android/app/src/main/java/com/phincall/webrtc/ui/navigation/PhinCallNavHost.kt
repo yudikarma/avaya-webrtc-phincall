@@ -23,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.phincall.webrtc.platform.shouldApplySecureWindowFlag
 import com.phincall.webrtc.ui.home.HomeRoute
 import com.phincall.webrtc.ui.home.HomeViewModel
 import com.phincall.webrtc.ui.incall.InCallActivity
@@ -45,13 +46,13 @@ fun PhinCallNavHost(
     val destination = backStackEntry?.destination
     val activeCallBannerViewModel: ActiveCallBannerViewModel = hiltViewModel()
     val callSnapshot by activeCallBannerViewModel.callState.collectAsStateWithLifecycle()
+    val allowScreenCapture by activeCallBannerViewModel.allowScreenCapture.collectAsStateWithLifecycle()
     val isSplash = destination?.hasRoute<PhinCallRoute.Splash>() == true
-    val isSettings = destination?.hasRoute<PhinCallRoute.Settings>() == true
     val showStickyCallBanner = shouldShowActiveCallStickyBanner(callSnapshot, isSplash)
 
-    LaunchedEffect(isSplash, isSettings, showStickyCallBanner) {
+    LaunchedEffect(isSplash, allowScreenCapture, showStickyCallBanner) {
         onUpdateWindowFlags(
-            isSettings,
+            shouldApplySecureWindowFlag(allowScreenCapture),
             false,
             !isSplash || showStickyCallBanner,
             false

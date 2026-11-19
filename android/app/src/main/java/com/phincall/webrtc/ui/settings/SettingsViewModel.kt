@@ -20,7 +20,10 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        SettingsFormState.fromLaunchConfig(runtimeConfigManager.activeConfig.value)
+        SettingsFormState.fromLaunchConfig(
+            config = runtimeConfigManager.activeConfig.value,
+            allowScreenCapture = runtimeConfigManager.allowScreenCapture.value
+        )
     )
     val uiState: StateFlow<SettingsFormState> = _uiState.asStateFlow()
 
@@ -30,26 +33,42 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun updateAllowScreenCapture(allow: Boolean) {
+        runtimeConfigManager.setAllowScreenCapture(allow)
+        _uiState.update { current ->
+            current.copy(allowScreenCapture = allow, feedbackMessage = null)
+        }
+    }
+
     fun switchPlatform(target: PlatformType) {
         val current = _uiState.value
         if (current.platformType == target) return
-        // Persist current platform draft before swapping profiles.
+        // Persist current platform draft and capture policy before swapping profiles.
+        runtimeConfigManager.setAllowScreenCapture(current.allowScreenCapture)
         runtimeConfigManager.saveAndApply(current.toLaunchConfig(strictNumbers = false))
         val loaded = runtimeConfigManager.switchPlatform(target)
-        _uiState.value = SettingsFormState.fromLaunchConfig(loaded)
+        _uiState.value = SettingsFormState.fromLaunchConfig(
+            config = loaded,
+            allowScreenCapture = runtimeConfigManager.allowScreenCapture.value
+        )
     }
 
     fun resetCurrentPlatform() {
         val platform = _uiState.value.platformType
         val defaults = runtimeConfigManager.resetPlatformToDefaults(platform)
-        _uiState.value = SettingsFormState.fromLaunchConfig(defaults).copy(
+        _uiState.value = SettingsFormState.fromLaunchConfig(
+            config = defaults,
+            allowScreenCapture = runtimeConfigManager.allowScreenCapture.value
+        ).copy(
             feedbackMessage = "Active platform profile reset to Avaya sample defaults.",
             isFeedbackError = false
         )
     }
 
     fun saveDraftOnly() {
-        runtimeConfigManager.saveAndApply(_uiState.value.toLaunchConfig(strictNumbers = false))
+        val current = _uiState.value
+        runtimeConfigManager.setAllowScreenCapture(current.allowScreenCapture)
+        runtimeConfigManager.saveAndApply(current.toLaunchConfig(strictNumbers = false))
     }
 
     fun saveAndValidate(): Boolean {
@@ -57,6 +76,7 @@ class SettingsViewModel @Inject constructor(
         val strictConfig = current.toLaunchConfig(strictNumbers = true)
         val issues = RuntimeConfigManager.validateForLaunch(strictConfig)
 
+        runtimeConfigManager.setAllowScreenCapture(current.allowScreenCapture)
         runtimeConfigManager.saveAndApply(current.toLaunchConfig(strictNumbers = false))
 
         return if (issues.isEmpty()) {
