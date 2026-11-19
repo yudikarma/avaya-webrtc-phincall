@@ -1,6 +1,7 @@
 package com.phincall.webrtc
 
 import com.avaya.ocs.Services.Work.Enums.AudioDeviceType
+import com.avaya.ocs.Services.Work.Enums.InteractionState
 import com.avaya.ocs.Services.Work.Enums.PlatformType
 import com.phincall.webrtc.auth.TokenRepository
 import com.phincall.webrtc.config.AmcServerConfig
@@ -18,7 +19,10 @@ import com.phincall.webrtc.config.SampleConfigurations
 import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
 import com.phincall.webrtc.ui.home.HomeUiState
+import com.phincall.webrtc.ui.navigation.formatActiveCallDuration
+import com.phincall.webrtc.ui.navigation.shouldShowActiveCallStickyBanner
 import com.phincall.webrtc.ui.settings.SettingsFormState
+import com.phincall.webrtc.webrtc.CallStateSnapshot
 import com.phincall.webrtc.webrtc.InteractionCoordinator
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -395,5 +399,44 @@ class RuntimeConfigTest {
         ).forEach { perm ->
             assertTrue("Manifest must declare $perm", manifest.contains(perm))
         }
+    }
+
+    @Test
+    fun activeCallStickyBannerVisibilityRespectsCallStateAndSplashRoute() {
+        assertFalse(shouldShowActiveCallStickyBanner(CallStateSnapshot(), isSplashRoute = false))
+
+        val activeAudio = CallStateSnapshot(
+            isLocked = true,
+            mediaMode = CallMediaMode.AUDIO,
+            interactionState = InteractionState.ESTABLISHED,
+            isDiscardCompleted = false
+        )
+        assertTrue(shouldShowActiveCallStickyBanner(activeAudio, isSplashRoute = false))
+        assertFalse(shouldShowActiveCallStickyBanner(activeAudio, isSplashRoute = true))
+
+        val activeVideo = activeAudio.copy(mediaMode = CallMediaMode.VIDEO)
+        assertTrue(shouldShowActiveCallStickyBanner(activeVideo, isSplashRoute = false))
+
+        assertFalse(
+            shouldShowActiveCallStickyBanner(
+                activeVideo.copy(isDiscardCompleted = true),
+                isSplashRoute = false
+            )
+        )
+        assertFalse(
+            shouldShowActiveCallStickyBanner(
+                activeVideo.copy(isLocked = false, isDiscardCompleted = true),
+                isSplashRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun formatActiveCallDurationFormatsSecondsMinutesAndHours() {
+        assertEquals("00:00", formatActiveCallDuration(-500L))
+        assertEquals("00:00", formatActiveCallDuration(0L))
+        assertEquals("00:09", formatActiveCallDuration(9_500L))
+        assertEquals("01:15", formatActiveCallDuration(75_000L))
+        assertEquals("1:01:01", formatActiveCallDuration(3_661_000L))
     }
 }

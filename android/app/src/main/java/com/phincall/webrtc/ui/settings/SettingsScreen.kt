@@ -111,7 +111,8 @@ private val CAPTURE_ORIENTATIONS = listOf(
 @Composable
 fun SettingsRoute(
     viewModel: SettingsViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    includeTopSafeArea: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -123,6 +124,7 @@ fun SettingsRoute(
 
     SettingsScreen(
         state = state,
+        includeTopSafeArea = includeTopSafeArea,
         onBack = {
             viewModel.saveDraftOnly()
             onNavigateBack()
@@ -153,13 +155,19 @@ fun SettingsScreen(
     onResetDefaults: () -> Unit,
     onUpdateForm: ((SettingsFormState) -> SettingsFormState) -> Unit,
     onSendLogs: () -> Unit,
-    onSaveAndApply: () -> Unit
+    onSaveAndApply: () -> Unit,
+    includeTopSafeArea: Boolean = true
 ) {
     val isOceana = state.platformType == PlatformType.OCEANA
     var apiKeyVisible by remember { mutableStateOf(false) }
     var showAboutDialog by rememberSaveable { mutableStateOf(false) }
     val appMetadata = remember { AppMetadata.current() }
     val activeProfileLabel = if (isOceana) "Avaya Oceana" else "Avaya Aura Elite"
+    val topBarInsets = if (includeTopSafeArea) {
+        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+    } else {
+        WindowInsetsSides.Horizontal
+    }
 
     Scaffold(
         containerColor = CanvasLight,
@@ -169,9 +177,7 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(
-                            WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
-                        )
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(topBarInsets))
                         .padding(horizontal = 8.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

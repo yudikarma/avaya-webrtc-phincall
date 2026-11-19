@@ -38,14 +38,6 @@ class InCallViewModel @Inject constructor(
     private val _statsText = MutableStateFlow("Reading live media statistics...")
     val statsText: StateFlow<String> = _statsText.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            while (isActive) {
-                interactionCoordinator.refreshElapsedTime()
-                delay(1000L)
-            }
-        }
-    }
 
     fun startInteractionOnce(videoStageContainer: ViewGroup?) {
         if (_hasStarted.value) return
@@ -79,7 +71,8 @@ class InCallViewModel @Inject constructor(
     fun sendDtmf(digit: String) = interactionCoordinator.sendDtmf(digit)
     fun selectAudioDevice(device: AudioDeviceType) = interactionCoordinator.selectAudioDevice(device)
     fun hangUpAndDiscard() = interactionCoordinator.hangUpAndDiscard()
-    fun onBackgrounded() = interactionCoordinator.onActivityStopped()
+    fun onBackgrounded(isInternalMinimize: Boolean = false) =
+        interactionCoordinator.onActivityStopped(isInternalMinimize)
     fun onResumed() = interactionCoordinator.onActivityResumed()
 
     override fun onCleared() {

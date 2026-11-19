@@ -47,10 +47,17 @@ import com.phincall.webrtc.config.CallMediaMode
 import com.phincall.webrtc.config.CallOutcome
 import com.phincall.webrtc.config.InteractionLaunchConfig
 import com.phincall.webrtc.logging.DiagnosticLogManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 
@@ -73,6 +80,8 @@ class InteractionCoordinator(
     private var videoDevice: VideoDevice? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var elapsedTickerJob: Job? = null
     private val interactionLocked = AtomicBoolean(false)
     private val discardRequested = AtomicBoolean(false)
 
@@ -171,6 +180,7 @@ class InteractionCoordinator(
                     interaction.start()
                 }
             }
+            startElapsedTicker()
             Result.success(Unit)
         } catch (ex: AuthorizationTokenException) {
             logFailure("Authorization token rejected by SDK", ex)
@@ -498,11 +508,21 @@ class InteractionCoordinator(
         }.onFailure { logFailure("Failed updating Android communication device to speaker", it) }
     }
 
+    private fun startElapsedTicker() {
+        elapsedTickerJob?.cancel()
+        elapsedTickerJob = coordinatorScope.launch {
+            while (isActive) {
+                refreshElapsedTime()
+                delay(1000L)
+            }
+        }
+    }
+
     /**
-     * Handles background transition cleanly without leaking camera or media streams.
-     * Supports optional privacy mute and prepares camera capture restoration (SDK 4.0.10).
+     * Handles background or in-app minimize transitions cleanly without leaking camera streams.
+     * Supports optional privacy mute when leaving the app and camera restoration on resume.
      */
-    fun onActivityStopped() {
+    fun onActivityStopped(isInternalMinimize: Boolean = false) {
         val interaction = videoInteraction ?: return
         val config = launchConfig ?: return
         val isActiveVideo = interaction.interactionState == InteractionState.ESTABLISHED &&
@@ -510,7 +530,7 @@ class InteractionCoordinator(
 
         if (!isActiveVideo) return
 
-        if (config.videoSettings.muteVideoWhenBackgrounded) {
+        if (!isInternalMinimize && config.videoSettings.muteVideoWhenBackgrounded) {
             runCatching {
                 interaction.muteVideo(true)
                 mutedVideoForBackground = true
@@ -579,6 +599,7 @@ class InteractionCoordinator(
         activeHistoryRecordId = null
         diagnosticLogManager.recordEvent(TAG, "Startup failure: $message")
         unregisterAndClearReferences()
+        runCatching { ActiveCallForegroundService.stop(application) }
         launchConfig = null
         interactionLocked.set(false)
         _state.update {
@@ -603,6 +624,7 @@ class InteractionCoordinator(
         activeHistoryRecordId = null
         diagnosticLogManager.recordEvent(TAG, "Interaction discard complete")
         unregisterAndClearReferences()
+        runCatching { ActiveCallForegroundService.stop(application) }
         // Drop launch configuration (including any in-memory proxy key) once the call ends.
         launchConfig = null
         interactionLocked.set(false)
@@ -615,6 +637,8 @@ class InteractionCoordinator(
     }
 
     private fun unregisterAndClearReferences() {
+        elapsedTickerJob?.cancel()
+        elapsedTickerJob = null
         mainHandler.removeCallbacksAndMessages(null)
         audioInteraction?.let { interaction ->
             runCatching {

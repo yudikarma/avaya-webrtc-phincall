@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.text.format.DateUtils
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -109,10 +110,16 @@ import java.util.Locale
 fun HomeRoute(
     viewModel: HomeViewModel,
     onOpenSettings: () -> Unit,
-    onNavigateToInCall: () -> Unit
+    onNavigateToInCall: () -> Unit,
+    onReturnToActiveCall: () -> Unit = {},
+    includeTopSafeArea: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    BackHandler(enabled = state.isCallLocked) {
+        onReturnToActiveCall()
+    }
 
     var pendingCall by remember { mutableStateOf<Triple<CallMediaMode, String?, PlatformType?>?>(null) }
     var permissionDialogMessage by remember { mutableStateOf<String?>(null) }
@@ -176,6 +183,7 @@ fun HomeRoute(
 
     HomeScreen(
         state = state,
+        includeTopSafeArea = includeTopSafeArea,
         onTogglePlatform = viewModel::togglePlatform,
         onOpenSettings = onOpenSettings,
         onStartCall = { mode, destOverride, platformOverride ->
@@ -235,7 +243,8 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onStartCall: (CallMediaMode, String?, PlatformType?) -> Unit,
     onOpenDialpad: (String) -> Unit,
-    onClearRecent: () -> Unit
+    onClearRecent: () -> Unit,
+    includeTopSafeArea: Boolean = true
 ) {
     val isOceana = state.config.platformType == PlatformType.OCEANA
 
@@ -245,6 +254,7 @@ fun HomeScreen(
         topBar = {
             HomeTopBar(
                 isOceana = isOceana,
+                includeTopSafeArea = includeTopSafeArea,
                 onTogglePlatform = onTogglePlatform,
                 onOpenSettings = onOpenSettings
             )
@@ -402,9 +412,15 @@ fun HomeScreen(
 @Composable
 private fun HomeTopBar(
     isOceana: Boolean,
+    includeTopSafeArea: Boolean,
     onTogglePlatform: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val topBarInsets = if (includeTopSafeArea) {
+        WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+    } else {
+        WindowInsetsSides.Horizontal
+    }
     Surface(
         color = SlateNavy,
         modifier = Modifier.fillMaxWidth()
@@ -412,9 +428,7 @@ private fun HomeTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
-                )
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(topBarInsets))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -863,12 +877,6 @@ private fun resolveStatusBanner(state: HomeUiState): StatusBannerState? = when {
         message = "Requesting csaGuest token from intermediary proxy...",
         toneColor = InkPrimary,
         isLoading = true,
-        showSettingsAction = false
-    )
-    state.isCallLocked -> StatusBannerState(
-        message = "Interaction in progress. Pre-call controls are disabled until termination.",
-        toneColor = InkSecondary,
-        isLoading = false,
         showSettingsAction = false
     )
     !state.errorMessage.isNullOrBlank() -> StatusBannerState(

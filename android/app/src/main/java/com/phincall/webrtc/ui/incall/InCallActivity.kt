@@ -1,5 +1,6 @@
 package com.phincall.webrtc.ui.incall
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -29,12 +30,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.avaya.ocs.Services.Device.Video.VideoSurfaceView
 import com.avaya.ocs.Services.Work.Enums.InteractionState
+import com.phincall.webrtc.MainActivity
 import com.phincall.webrtc.R
 import com.phincall.webrtc.config.CallMediaMode
 import com.phincall.webrtc.ui.theme.PhinCallTheme
 import com.phincall.webrtc.webrtc.ActiveCallForegroundService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -58,6 +61,7 @@ class InCallActivity : ComponentActivity() {
     private var hangupTapped by mutableStateOf(false)
     private var localPipMeta by mutableStateOf("")
     private var hasFinished by mutableStateOf(false)
+    private var isMinimizingToApp = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +108,8 @@ class InCallActivity : ComponentActivity() {
                         snapshot = snapshot,
                         isOnline = isOnline,
                         localPipMeta = localPipMeta,
-                        onOpenStats = { showStatsDialog = true }
+                        onOpenStats = { showStatsDialog = true },
+                        onMinimizeToApp = ::minimizeToApp
                     )
                 }
             }
@@ -191,36 +196,12 @@ class InCallActivity : ComponentActivity() {
             )
             setContent {
                 val snapshot by viewModel.callState.collectAsStateWithLifecycle()
-                val hasStarted by viewModel.hasStarted.collectAsStateWithLifecycle()
-                val startupFailure by viewModel.startupFailure.collectAsStateWithLifecycle()
                 val statsText by viewModel.statsText.collectAsStateWithLifecycle()
 
-                // Appendix D: Back gesture triggers safe end() + discard() teardown.
+                // System Back minimizes to MainActivity without pausing or hanging up the call.
                 BackHandler {
-                    hangupTapped = true
-                    viewModel.hangUpAndDiscard()
-                }
-
-                LaunchedEffect(startupFailure) {
-                    val failure = startupFailure ?: return@LaunchedEffect
-                    Toast.makeText(this@InCallActivity, failure, Toast.LENGTH_LONG).show()
-                    exitCallActivity()
-                }
-
-                // Finish only after Avaya CSDK fires onDiscardComplete() (Appendix D).
-                LaunchedEffect(hasStarted, snapshot.isDiscardCompleted, startupFailure) {
-                    if (hasStarted && snapshot.isDiscardCompleted) {
-                        if (startupFailure == null &&
-                            !snapshot.errorMessage.isNullOrBlank() &&
-                            snapshot.interactionState == InteractionState.FAILED
-                        ) {
-                            Toast.makeText(
-                                this@InCallActivity,
-                                snapshot.errorMessage,
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        exitCallActivity()
+                    if (!hangupTapped) {
+                        minimizeToApp()
                     }
                 }
 
@@ -305,21 +286,68 @@ class InCallActivity : ComponentActivity() {
             }
         }
 
+        // Keep observing completion even while minimized behind MainActivity (CREATED state)
+        // so remote hangups finish InCallActivity immediately (Appendix D).
+        lifecycleScope.launch {
+            combine(
+                viewModel.hasStarted,
+                viewModel.callState,
+                viewModel.startupFailure
+            ) { started, snapshot, failure ->
+                Triple(started, snapshot, failure)
+            }.collect { (started, snapshot, failure) ->
+                if (hasFinished) return@collect
+                if (failure != null) {
+                    Toast.makeText(this@InCallActivity, failure, Toast.LENGTH_LONG).show()
+                    exitCallActivity()
+                } else if (started && snapshot.isDiscardCompleted) {
+                    if (!snapshot.errorMessage.isNullOrBlank() &&
+                        snapshot.interactionState == InteractionState.FAILED
+                    ) {
+                        Toast.makeText(
+                            this@InCallActivity,
+                            snapshot.errorMessage,
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    exitCallActivity()
+                }
+            }
+        }
+
         ActiveCallForegroundService.start(this, isVideoCall)
         viewModel.startInteractionOnce(stageRoot)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        isMinimizingToApp = false
     }
 
     override fun onStop() {
         showDtmfDialog = false
         showStatsDialog = false
         showAudioSheet = false
-        viewModel.onBackgrounded()
+        val internalMinimize = isMinimizingToApp
+        isMinimizingToApp = false
+        viewModel.onBackgrounded(isInternalMinimize = internalMinimize)
         super.onStop()
     }
 
     override fun onResume() {
         super.onResume()
+        isMinimizingToApp = false
         viewModel.onResumed()
+    }
+
+    private fun minimizeToApp() {
+        isMinimizingToApp = true
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        )
     }
 
     override fun onDestroy() {

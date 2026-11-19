@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.CallEnd
 import androidx.compose.material.icons.rounded.Cameraswitch
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dialpad
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Pause
@@ -89,7 +90,8 @@ internal fun InCallTopHud(
     snapshot: CallStateSnapshot,
     isOnline: Boolean,
     localPipMeta: String,
-    onOpenStats: () -> Unit
+    onOpenStats: () -> Unit,
+    onMinimizeToApp: () -> Unit = {}
 ) {
     val isVideoCall = (config?.mediaMode ?: snapshot.mediaMode) == CallMediaMode.VIDEO
     val platformLabel = "${(config?.platformType ?: snapshot.platformType).name} / ${if (isVideoCall) "VIDEO" else "AUDIO"}"
@@ -112,6 +114,14 @@ internal fun InCallTopHud(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                DockIconButton(
+                    icon = Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = "Minimize active call and return to app",
+                    containerColor = DockButtonIdle,
+                    size = 44.dp,
+                    onClick = onMinimizeToApp
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "$platformLabel$destSuffix",
                     color = InkOnDark,
