@@ -4,13 +4,16 @@ import android.Manifest
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.avaya.clientservices.call.CallType
 import com.avaya.ocs.Config.ClientConfiguration
@@ -90,6 +93,33 @@ class InteractionCoordinator(
     private var mutedVideoForBackground = false
     private var activeHistoryRecordId: String? = null
     private var reachedActiveState = false
+    private var desiredAudioDevice: AudioDeviceType? = null
+    private var desiredAudioRouteTimestampMs: Long = 0L
+    private var routeEnforcementRetries: Int = 0
+    private var didOverrideCommunicationRoute: Boolean = false
+    private var audioDeviceCallback: AudioDeviceCallback? = null
+    private var communicationDeviceListener: Any? = null
+
+    private val sdkApplication: Application by lazy {
+        SdkSafeApplication(application) { action, ex ->
+            diagnosticLogManager.recordEvent(
+                TAG,
+                "Handled SDK BroadcastReceiver SecurityException ($action): ${ex.message}"
+            )
+            if (action == AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED) {
+                mainHandler.post {
+                    val target = desiredAudioDevice
+                    if (activeInteraction() != null &&
+                        target != null &&
+                        target != AudioDeviceType.BLUETOOTH_HEADSET
+                    ) {
+                        routeAudioDeviceViaAudioManager(target)
+                        _state.update { it.copy(currentAudioDevice = target) }
+                    }
+                }
+            }
+        }
+    }
 
     val currentLaunchConfig: InteractionLaunchConfig?
         get() = launchConfig
@@ -104,6 +134,10 @@ class InteractionCoordinator(
         restoreCameraOnResume = false
         mutedVideoForBackground = false
         reachedActiveState = false
+        desiredAudioDevice = null
+        desiredAudioRouteTimestampMs = 0L
+        routeEnforcementRetries = 0
+        didOverrideCommunicationRoute = false
         activeHistoryRecordId = callHistoryStore.recordCallStart(config)
         _state.value = CallStateSnapshot(
             isLocked = true,
@@ -173,7 +207,7 @@ class InteractionCoordinator(
 
             when (config.mediaMode) {
                 CallMediaMode.AUDIO -> {
-                    val interaction = work.createAudioInteraction(application, this)
+                    val interaction = work.createAudioInteraction(sdkApplication, this)
                     configureCommonInteraction(interaction, config, authorizationToken)
                     interaction.registerListener(this as AudioInteractionListener)
                     interaction.registerConnectionListener(this)
@@ -184,7 +218,7 @@ class InteractionCoordinator(
                     requireNotNull(videoStageContainer) {
                         "Video stage ViewGroup with VideoSurfaceView children is required for video calls."
                     }
-                    val interaction = work.createVideoInteraction(application, this)
+                    val interaction = work.createVideoInteraction(sdkApplication, this)
                     configureCommonInteraction(interaction, config, authorizationToken)
                     interaction.registerListener(this)
                     interaction.registerConnectionListener(this)
@@ -197,6 +231,8 @@ class InteractionCoordinator(
                     interaction.start()
                 }
             }
+            registerSystemAudioMonitors()
+            refreshAvailableAudioDevicesWithSystemBluetooth()
             startElapsedTicker()
             Result.success(Unit)
         } catch (ex: AuthorizationTokenException) {
@@ -440,11 +476,7 @@ class InteractionCoordinator(
     fun selectAudioDevice(deviceType: AudioDeviceType) {
         val interaction = activeInteraction() ?: return
         val current = _state.value.currentAudioDevice
-        val hasBluetoothConnect = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            ContextCompat.checkSelfPermission(
-                application,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED
+        val hasBluetoothConnect = hasBluetoothConnectGranted()
 
         if (!hasBluetoothConnect &&
             (deviceType == AudioDeviceType.BLUETOOTH_HEADSET || current == AudioDeviceType.BLUETOOTH_HEADSET)
@@ -453,11 +485,13 @@ class InteractionCoordinator(
                 diagnosticLogManager.recordEvent(TAG, "Skipped Bluetooth selection without BLUETOOTH_CONNECT")
                 return
             }
+            markDesiredAudioRoute(deviceType)
             routeAudioDeviceViaAudioManager(deviceType)
             _state.update { it.copy(currentAudioDevice = deviceType) }
             return
         }
 
+        markDesiredAudioRoute(deviceType)
         runCatching { interaction.setAudioDevice(deviceType) }
             .onFailure {
                 logFailure("setAudioDevice($deviceType) failed", it)
@@ -465,41 +499,54 @@ class InteractionCoordinator(
                 _state.update { state -> state.copy(currentAudioDevice = deviceType) }
             }
 
-        if (deviceType == AudioDeviceType.SPEAKER) {
-            mainHandler.postDelayed(
-                {
-                    if (activeInteraction() != null &&
-                        _state.value.currentAudioDevice == AudioDeviceType.SPEAKER
-                    ) {
+        mainHandler.postDelayed(
+            {
+                if (activeInteraction() != null && desiredAudioDevice == deviceType) {
+                    if (deviceType == AudioDeviceType.SPEAKER) {
                         ensureSpeakerCommunicationRouteIfStillBluetooth()
+                    } else if (deviceType == AudioDeviceType.BLUETOOTH_HEADSET) {
+                        ensureBluetoothCommunicationRouteIfNeeded()
+                    } else if (_state.value.currentAudioDevice == AudioDeviceType.BLUETOOTH_HEADSET) {
+                        routeAudioDeviceViaAudioManager(deviceType)
                     }
-                },
-                350L
-            )
-        }
+                    if (deviceType != AudioDeviceType.BLUETOOTH_HEADSET &&
+                        _state.value.currentAudioDevice == AudioDeviceType.BLUETOOTH_HEADSET
+                    ) {
+                        _state.update { it.copy(currentAudioDevice = deviceType) }
+                    }
+                }
+            },
+            350L
+        )
     }
+
+    private fun markDesiredAudioRoute(deviceType: AudioDeviceType) {
+        desiredAudioDevice = deviceType
+        desiredAudioRouteTimestampMs = SystemClock.elapsedRealtime()
+        routeEnforcementRetries = 0
+    }
+
+    private fun hasBluetoothConnectGranted(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(
+                application,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
 
     private fun routeAudioDeviceViaAudioManager(deviceType: AudioDeviceType) {
         runCatching {
             val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val targetTypes = when (deviceType) {
-                    AudioDeviceType.SPEAKER -> intArrayOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
-                    AudioDeviceType.HANDSET -> intArrayOf(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
-                    AudioDeviceType.WIRED_HEADSET -> intArrayOf(
-                        AudioDeviceInfo.TYPE_WIRED_HEADSET,
-                        AudioDeviceInfo.TYPE_USB_HEADSET
-                    )
-                    AudioDeviceType.BLUETOOTH_HEADSET -> intArrayOf(
-                        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-                        AudioDeviceInfo.TYPE_BLE_HEADSET
-                    )
-                }
-                val target = audioManager.availableCommunicationDevices
-                    .firstOrNull { info -> targetTypes.contains(info.type) }
+                val target = findCommunicationDeviceApi31(audioManager, deviceType)
                 if (target != null) {
-                    audioManager.setCommunicationDevice(target)
+                    didOverrideCommunicationRoute = true
+                    val switched = audioManager.setCommunicationDevice(target)
+                    if (!switched) {
+                        audioManager.clearCommunicationDevice()
+                        audioManager.setCommunicationDevice(target)
+                    }
                 } else if (deviceType == AudioDeviceType.HANDSET) {
+                    didOverrideCommunicationRoute = true
                     audioManager.clearCommunicationDevice()
                 }
             } else {
@@ -515,22 +562,198 @@ class InteractionCoordinator(
         }.onFailure { logFailure("AudioManager fallback route ($deviceType) failed", it) }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun findCommunicationDeviceApi31(
+        audioManager: AudioManager,
+        deviceType: AudioDeviceType
+    ): AudioDeviceInfo? {
+        val devices = audioManager.availableCommunicationDevices
+        return when (deviceType) {
+            AudioDeviceType.SPEAKER -> devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+            AudioDeviceType.HANDSET -> devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+            AudioDeviceType.WIRED_HEADSET -> devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+            }
+            AudioDeviceType.BLUETOOTH_HEADSET -> devices.firstOrNull {
+                isBluetoothCommunicationTypeApi31(it.type)
+            }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun isBluetoothCommunicationTypeApi31(type: Int): Boolean =
+        type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+            type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+            type == AudioDeviceInfo.TYPE_HEARING_AID
+
+    private fun isAnyBluetoothAudioType(type: Int): Boolean {
+        if (type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            type == AudioDeviceInfo.TYPE_HEARING_AID
+        ) {
+            return true
+        }
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isBluetoothCommunicationTypeApi31(type)
+    }
+
+    private fun mapSystemDeviceTypeToAvaya(type: Int): AudioDeviceType? = when {
+        isAnyBluetoothAudioType(type) -> AudioDeviceType.BLUETOOTH_HEADSET
+        type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> AudioDeviceType.SPEAKER
+        type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> AudioDeviceType.HANDSET
+        type == AudioDeviceInfo.TYPE_WIRED_HEADSET || type == AudioDeviceInfo.TYPE_USB_HEADSET ->
+            AudioDeviceType.WIRED_HEADSET
+        else -> null
+    }
+
+    private fun hasSystemBluetoothCommunicationDevice(audioManager: AudioManager): Boolean {
+        if (!hasBluetoothConnectGranted()) return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching {
+                audioManager.availableCommunicationDevices.any { isBluetoothCommunicationTypeApi31(it.type) }
+            }.getOrDefault(false)
+        } else {
+            runCatching {
+                audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_HEARING_AID
+                }
+            }.getOrDefault(false)
+        }
+    }
+
+    private fun refreshAvailableAudioDevicesWithSystemBluetooth() {
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val hasSystemBt = audioManager != null && hasSystemBluetoothCommunicationDevice(audioManager)
+        val rawAvaya = runCatching { activeInteraction()?.availableAudioDevices }.getOrNull()
+        val avayaList = sanitizeAudioDeviceList(rawAvaya)
+        _state.update { snapshot ->
+            val source = if (avayaList.isNotEmpty()) avayaList else snapshot.availableAudioDevices
+            snapshot.copy(availableAudioDevices = mergeSystemAudioDevices(source, hasSystemBt))
+        }
+    }
+
     private fun ensureSpeakerCommunicationRouteIfStillBluetooth() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         runCatching {
             val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
             val currentType = audioManager.communicationDevice?.type
-            if (currentType == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                currentType == AudioDeviceInfo.TYPE_BLE_HEADSET ||
-                currentType == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
-            ) {
-                val speaker = audioManager.availableCommunicationDevices
-                    .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                if (speaker != null) {
-                    audioManager.setCommunicationDevice(speaker)
-                }
+            if (currentType != null && isAnyBluetoothAudioType(currentType)) {
+                routeAudioDeviceViaAudioManager(AudioDeviceType.SPEAKER)
             }
         }.onFailure { logFailure("Failed updating Android communication device to speaker", it) }
+    }
+
+    private fun ensureBluetoothCommunicationRouteIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (!hasBluetoothConnectGranted()) return
+        runCatching {
+            val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            val currentType = audioManager.communicationDevice?.type
+            if (currentType == null || !isAnyBluetoothAudioType(currentType)) {
+                routeAudioDeviceViaAudioManager(AudioDeviceType.BLUETOOTH_HEADSET)
+                val updatedType = audioManager.communicationDevice?.type
+                if (updatedType != null && isAnyBluetoothAudioType(updatedType)) {
+                    _state.update { it.copy(currentAudioDevice = AudioDeviceType.BLUETOOTH_HEADSET) }
+                }
+            }
+        }.onFailure { logFailure("Failed updating Android communication device to Bluetooth", it) }
+    }
+
+    private fun registerSystemAudioMonitors() {
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        if (audioDeviceCallback == null) {
+            val callback = object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+                    if (addedDevices.any { isAnyBluetoothAudioType(it.type) }) {
+                        diagnosticLogManager.recordEvent(TAG, "Bluetooth audio device connected")
+                        refreshAvailableAudioDevicesWithSystemBluetooth()
+                    }
+                }
+
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+                    if (removedDevices.any { isAnyBluetoothAudioType(it.type) }) {
+                        diagnosticLogManager.recordEvent(TAG, "Bluetooth audio device disconnected")
+                        refreshAvailableAudioDevicesWithSystemBluetooth()
+                        if (_state.value.currentAudioDevice == AudioDeviceType.BLUETOOTH_HEADSET &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        ) {
+                            val activeSysType = runCatching { audioManager.communicationDevice?.type }.getOrNull()
+                            val mapped = activeSysType?.let(::mapSystemDeviceTypeToAvaya)
+                            if (mapped != null && mapped != AudioDeviceType.BLUETOOTH_HEADSET) {
+                                _state.update { it.copy(currentAudioDevice = mapped) }
+                            }
+                        }
+                    }
+                }
+            }
+            audioDeviceCallback = callback
+            runCatching { audioManager.registerAudioDeviceCallback(callback, mainHandler) }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && communicationDeviceListener == null) {
+            registerCommunicationListenerApi31(audioManager)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun registerCommunicationListenerApi31(audioManager: AudioManager) {
+        val listener = AudioManager.OnCommunicationDeviceChangedListener { device ->
+            if (activeInteraction() == null) return@OnCommunicationDeviceChangedListener
+            val target = desiredAudioDevice
+            val deviceType = device?.type
+            if (target != null &&
+                target != AudioDeviceType.BLUETOOTH_HEADSET &&
+                deviceType != null &&
+                isAnyBluetoothAudioType(deviceType) &&
+                SystemClock.elapsedRealtime() - desiredAudioRouteTimestampMs <= 2000L &&
+                routeEnforcementRetries < 2
+            ) {
+                routeEnforcementRetries++
+                diagnosticLogManager.recordEvent(
+                    TAG,
+                    "Re-applying $target after OS reverted audio route to Bluetooth"
+                )
+                routeAudioDeviceViaAudioManager(target)
+                return@OnCommunicationDeviceChangedListener
+            }
+
+            if (deviceType != null) {
+                val mapped = mapSystemDeviceTypeToAvaya(deviceType)
+                if (mapped != null && mapped == target && _state.value.currentAudioDevice != mapped) {
+                    _state.update { it.copy(currentAudioDevice = mapped) }
+                }
+            }
+        }
+        communicationDeviceListener = listener
+        runCatching {
+            audioManager.addOnCommunicationDeviceChangedListener(application.mainExecutor, listener)
+        }
+    }
+
+    private fun unregisterSystemAudioMonitors() {
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        audioDeviceCallback?.let { cb ->
+            runCatching { audioManager?.unregisterAudioDeviceCallback(cb) }
+        }
+        audioDeviceCallback = null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && audioManager != null) {
+            unregisterCommunicationListenerApi31(audioManager)
+            if (didOverrideCommunicationRoute) {
+                runCatching { audioManager.clearCommunicationDevice() }
+            }
+        }
+        didOverrideCommunicationRoute = false
+        desiredAudioRouteTimestampMs = 0L
+        routeEnforcementRetries = 0
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun unregisterCommunicationListenerApi31(audioManager: AudioManager) {
+        val listener = communicationDeviceListener as? AudioManager.OnCommunicationDeviceChangedListener
+        if (listener != null) {
+            runCatching { audioManager.removeOnCommunicationDeviceChangedListener(listener) }
+        }
+        communicationDeviceListener = null
     }
 
     private fun startElapsedTicker() {
@@ -668,6 +891,7 @@ class InteractionCoordinator(
         elapsedTickerJob?.cancel()
         elapsedTickerJob = null
         mainHandler.removeCallbacksAndMessages(null)
+        unregisterSystemAudioMonitors()
         audioInteraction?.let { interaction ->
             runCatching {
                 interaction.unregisterListener(this as AudioInteractionListener)
@@ -683,6 +907,7 @@ class InteractionCoordinator(
         audioInteraction = null
         videoInteraction = null
         videoDevice = null
+        desiredAudioDevice = null
     }
 
     private fun syncInteractionState() {
@@ -826,17 +1051,22 @@ class InteractionCoordinator(
 
     override fun onAudioDeviceListChanged(devices: MutableList<AudioDeviceType>?) {
         val sanitized = sanitizeAudioDeviceList(devices)
-        _state.update { it.copy(availableAudioDevices = sanitized) }
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val hasSystemBt = audioManager != null && hasSystemBluetoothCommunicationDevice(audioManager)
+        _state.update { it.copy(availableAudioDevices = mergeSystemAudioDevices(sanitized, hasSystemBt)) }
     }
 
     override fun onAudioDeviceChanged(deviceType: AudioDeviceType?) {
         val available = sanitizeAudioDeviceList(
             runCatching { activeInteraction()?.availableAudioDevices }.getOrNull()
         )
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val hasSystemBt = audioManager != null && hasSystemBluetoothCommunicationDevice(audioManager)
         _state.update {
+            val baseList = if (available.isNotEmpty()) available else it.availableAudioDevices
             it.copy(
                 currentAudioDevice = deviceType,
-                availableAudioDevices = if (available.isNotEmpty()) available else it.availableAudioDevices
+                availableAudioDevices = mergeSystemAudioDevices(baseList, hasSystemBt)
             )
         }
     }
@@ -854,6 +1084,16 @@ class InteractionCoordinator(
                 val snapshot = synchronized(rawDevices) { rawDevices.toTypedArray() }
                 snapshot.filterIsInstance<AudioDeviceType>().distinct()
             }.getOrDefault(emptyList())
+        }
+
+        internal fun mergeSystemAudioDevices(
+            avayaDevices: List<AudioDeviceType>,
+            hasSystemBluetooth: Boolean
+        ): List<AudioDeviceType> {
+            if (!hasSystemBluetooth || avayaDevices.contains(AudioDeviceType.BLUETOOTH_HEADSET)) {
+                return avayaDevices
+            }
+            return avayaDevices + AudioDeviceType.BLUETOOTH_HEADSET
         }
     }
 }

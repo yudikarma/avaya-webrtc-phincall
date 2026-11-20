@@ -20,11 +20,14 @@ import com.phincall.webrtc.config.TokenProxyConfig
 import com.phincall.webrtc.config.WebGatewayConfigModel
 import com.phincall.webrtc.platform.shouldApplySecureWindowFlag
 import com.phincall.webrtc.ui.home.HomeUiState
+import com.phincall.webrtc.ui.home.requiredCallPermissions
 import com.phincall.webrtc.ui.navigation.formatActiveCallDuration
 import com.phincall.webrtc.ui.navigation.shouldShowActiveCallStickyBanner
 import com.phincall.webrtc.ui.settings.SettingsFormState
+import com.phincall.webrtc.webrtc.ActiveCallForegroundService
 import com.phincall.webrtc.webrtc.CallStateSnapshot
 import com.phincall.webrtc.webrtc.InteractionCoordinator
+import com.phincall.webrtc.webrtc.runBroadcastSafely
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
@@ -481,5 +484,118 @@ class RuntimeConfigTest {
         ).forEach { rule ->
             assertTrue("proguard-rules.pro must include: $rule", rules.contains(rule))
         }
+    }
+
+    @Test
+    fun requiredCallPermissionsIncludeReadPhoneStateAndBluetoothConnectOnAndroid12Plus() {
+        val audioPermissionsApi35 = requiredCallPermissions(CallMediaMode.AUDIO, sdkInt = 35)
+        assertTrue(audioPermissionsApi35.contains("android.permission.RECORD_AUDIO"))
+        assertTrue(audioPermissionsApi35.contains("android.permission.READ_PHONE_STATE"))
+        assertTrue(audioPermissionsApi35.contains("android.permission.BLUETOOTH_CONNECT"))
+        assertTrue(audioPermissionsApi35.contains("android.permission.POST_NOTIFICATIONS"))
+        assertFalse(audioPermissionsApi35.contains("android.permission.CAMERA"))
+
+        val videoPermissionsApi35 = requiredCallPermissions(CallMediaMode.VIDEO, sdkInt = 35)
+        assertTrue(videoPermissionsApi35.contains("android.permission.CAMERA"))
+        assertTrue(videoPermissionsApi35.contains("android.permission.READ_PHONE_STATE"))
+        assertTrue(videoPermissionsApi35.contains("android.permission.BLUETOOTH_CONNECT"))
+
+        val audioPermissionsApi29 = requiredCallPermissions(CallMediaMode.AUDIO, sdkInt = 29)
+        assertTrue(audioPermissionsApi29.contains("android.permission.READ_PHONE_STATE"))
+        assertFalse(audioPermissionsApi29.contains("android.permission.BLUETOOTH_CONNECT"))
+        assertFalse(audioPermissionsApi29.contains("android.permission.POST_NOTIFICATIONS"))
+    }
+
+    @Test
+    fun runBroadcastSafelySuppressesSecurityExceptionWithoutCrashingMainLooper() {
+        var capturedAction: String? = null
+        var capturedMessage: String? = null
+
+        runBroadcastSafely(
+            action = "android.media.ACTION_SCO_AUDIO_STATE_UPDATED",
+            onSecurityException = { action, ex ->
+                capturedAction = action
+                capturedMessage = ex.message
+            }
+        ) {
+            throw SecurityException("getCallState requires READ_PHONE_STATE")
+        }
+
+        assertEquals("android.media.ACTION_SCO_AUDIO_STATE_UPDATED", capturedAction)
+        assertTrue(capturedMessage?.contains("READ_PHONE_STATE") == true)
+
+        var ranNormally = false
+        runBroadcastSafely(
+            action = "android.intent.action.HEADSET_PLUG",
+            onSecurityException = { _, _ -> throw AssertionError("Should not invoke handler") }
+        ) {
+            ranNormally = true
+        }
+        assertTrue(ranNormally)
+    }
+
+    @Test
+    fun activeCallForegroundServiceManifestAndTypeCandidatesSupportBackgroundAndBluetooth() {
+        val manifestFile = listOf(
+            File("app/src/main/AndroidManifest.xml"),
+            File("src/main/AndroidManifest.xml")
+        ).firstOrNull { it.isFile }
+        assertTrue("Expected AndroidManifest.xml to exist", manifestFile != null)
+        val manifest = manifestFile!!.readText()
+        listOf(
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            "android.permission.FOREGROUND_SERVICE_CAMERA",
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+            "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
+            "microphone|camera|mediaPlayback|connectedDevice"
+        ).forEach { entry ->
+            assertTrue("Manifest must include: $entry", manifest.contains(entry))
+        }
+
+        val videoAllGranted = ActiveCallForegroundService.buildForegroundServiceTypeCandidates(
+            isVideoCall = true,
+            hasMicPermission = true,
+            hasCameraPermission = true,
+            hasBluetoothConnect = true
+        )
+        assertTrue(
+            "Expected multiple FGS fallback candidates for background resilience",
+            videoAllGranted.size >= 3
+        )
+        assertEquals(videoAllGranted.distinct().size, videoAllGranted.size)
+
+        val audioNoBt = ActiveCallForegroundService.buildForegroundServiceTypeCandidates(
+            isVideoCall = false,
+            hasMicPermission = true,
+            hasCameraPermission = false,
+            hasBluetoothConnect = false
+        )
+        assertEquals(2, audioNoBt.size)
+    }
+
+    @Test
+    fun mergeSystemAudioDevicesExposesBluetoothWhenSdk36LeAudioDeviceConnected() {
+        val base = listOf(AudioDeviceType.HANDSET, AudioDeviceType.SPEAKER)
+        val withBt = InteractionCoordinator.mergeSystemAudioDevices(base, hasSystemBluetooth = true)
+        assertEquals(
+            listOf(
+                AudioDeviceType.HANDSET,
+                AudioDeviceType.SPEAKER,
+                AudioDeviceType.BLUETOOTH_HEADSET
+            ),
+            withBt
+        )
+
+        val alreadyHasBt = InteractionCoordinator.mergeSystemAudioDevices(
+            listOf(AudioDeviceType.BLUETOOTH_HEADSET, AudioDeviceType.SPEAKER),
+            hasSystemBluetooth = true
+        )
+        assertEquals(
+            listOf(AudioDeviceType.BLUETOOTH_HEADSET, AudioDeviceType.SPEAKER),
+            alreadyHasBt
+        )
+
+        val withoutBt = InteractionCoordinator.mergeSystemAudioDevices(base, hasSystemBluetooth = false)
+        assertEquals(base, withoutBt)
     }
 }

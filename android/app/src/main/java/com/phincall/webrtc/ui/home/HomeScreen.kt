@@ -154,14 +154,7 @@ fun HomeRoute(
         destinationOverride: String?,
         platformOverride: PlatformType? = null
     ) {
-        val needed = buildList {
-            add(Manifest.permission.RECORD_AUDIO)
-            if (mode == CallMediaMode.VIDEO) add(Manifest.permission.CAMERA)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                add(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        val needed = requiredCallPermissions(mode)
         val missing = needed.filterNot { context.hasPermission(it) }
         if (missing.isEmpty()) {
             viewModel.startCall(mode, destinationOverride, platformOverride)
@@ -897,6 +890,21 @@ private fun formatShortDuration(durationMillis: Long): String {
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
     return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+}
+
+internal fun requiredCallPermissions(
+    mode: CallMediaMode,
+    sdkInt: Int = Build.VERSION.SDK_INT
+): List<String> = buildList {
+    add(Manifest.permission.RECORD_AUDIO)
+    if (mode == CallMediaMode.VIDEO) add(Manifest.permission.CAMERA)
+    add(Manifest.permission.READ_PHONE_STATE)
+    if (sdkInt >= Build.VERSION_CODES.S) {
+        add(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+    if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+    }
 }
 
 private fun Context.hasPermission(permission: String): Boolean =
