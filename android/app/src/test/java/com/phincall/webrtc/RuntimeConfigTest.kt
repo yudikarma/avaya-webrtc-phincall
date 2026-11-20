@@ -463,7 +463,7 @@ class RuntimeConfigTest {
     }
 
     @Test
-    fun proguardRulesKeepAvayaWebRtcJniEventBusAndJacksonPackages() {
+    fun proguardRulesKeepAvayaWebRtcNettySlf4jEventBusAndJacksonPackages() {
         val proguardFile = listOf(
             File("app/proguard-rules.pro"),
             File("proguard-rules.pro")
@@ -473,8 +473,11 @@ class RuntimeConfigTest {
         listOf(
             "-keep class com.avaya.** { *; }",
             "-keep class org.webrtc.** { *; }",
+            "-keep class io.netty.** { *; }",
+            "-keep class org.slf4j.** { *; }",
             "-keep class org.greenrobot.eventbus.** { *; }",
-            "-keep class com.fasterxml.jackson.** { *; }"
+            "-keep class com.fasterxml.jackson.** { *; }",
+            "Signature"
         ).forEach { rule ->
             assertTrue("proguard-rules.pro must include: $rule", rules.contains(rule))
         }
