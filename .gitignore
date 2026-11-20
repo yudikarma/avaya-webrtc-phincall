@@ -29,6 +29,9 @@ android/keystore.properties
 token-proxy/.env
 token-proxy/certs/
 
+# Local archives
+*.zip
+
 # OS files
 .DS_Store
 Thumbs.db
