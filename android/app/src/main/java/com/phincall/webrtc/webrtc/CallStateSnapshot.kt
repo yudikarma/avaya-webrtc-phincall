@@ -27,5 +27,6 @@ data class CallStateSnapshot(
     val signallingBanner: String? = null,
     val errorMessage: String? = null,
     val lastError: InteractionError? = null,
+    val isMinimizedInApp: Boolean = false,
     val isDiscardCompleted: Boolean = false
 )

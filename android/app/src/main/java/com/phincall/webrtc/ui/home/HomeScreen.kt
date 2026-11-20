@@ -117,7 +117,7 @@ fun HomeRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    BackHandler(enabled = state.isCallLocked) {
+    BackHandler(enabled = state.isCallLocked && !state.isFetchingToken) {
         onReturnToActiveCall()
     }
 
@@ -157,10 +157,8 @@ fun HomeRoute(
         val needed = buildList {
             add(Manifest.permission.RECORD_AUDIO)
             if (mode == CallMediaMode.VIDEO) add(Manifest.permission.CAMERA)
-            add(Manifest.permission.READ_PHONE_STATE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_CONNECT)
-                add(Manifest.permission.BLUETOOTH_SCAN)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }

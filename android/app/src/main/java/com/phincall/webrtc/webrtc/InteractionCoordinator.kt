@@ -80,7 +80,7 @@ class InteractionCoordinator(
     private var videoDevice: VideoDevice? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var elapsedTickerJob: Job? = null
     private val interactionLocked = AtomicBoolean(false)
     private val discardRequested = AtomicBoolean(false)
@@ -110,9 +110,20 @@ class InteractionCoordinator(
             platformType = config.platformType,
             mediaMode = config.mediaMode,
             interactionState = InteractionState.IDLE,
-            isVideoEnabled = config.mediaMode == CallMediaMode.VIDEO
+            isVideoEnabled = config.mediaMode == CallMediaMode.VIDEO,
+            isMinimizedInApp = false
         )
         return true
+    }
+
+    fun setMinimizedInApp(minimized: Boolean) {
+        _state.update { snapshot ->
+            if (!snapshot.isLocked || snapshot.isDiscardCompleted) {
+                if (snapshot.isMinimizedInApp) snapshot.copy(isMinimizedInApp = false) else snapshot
+            } else {
+                snapshot.copy(isMinimizedInApp = minimized)
+            }
+        }
     }
 
     fun releaseLockOnPreCallFailure(errorMessage: String) {
@@ -123,7 +134,13 @@ class InteractionCoordinator(
         launchConfig = null
         interactionLocked.set(false)
         diagnosticLogManager.recordEvent(TAG, "Pre-call failure: $errorMessage")
-        _state.update { it.copy(isLocked = false, errorMessage = errorMessage) }
+        _state.update {
+            it.copy(
+                isLocked = false,
+                isMinimizedInApp = false,
+                errorMessage = errorMessage
+            )
+        }
     }
 
     /**
@@ -186,9 +203,10 @@ class InteractionCoordinator(
             logFailure("Authorization token rejected by SDK", ex)
             handleStartupFailure("Authorization token error: ${ex.message}")
             Result.failure(ex)
-        } catch (ex: Exception) {
+        } catch (ex: Throwable) {
+            if (ex is VirtualMachineError) throw ex
             logFailure("Failed to start interaction", ex)
-            handleStartupFailure("Unable to start interaction: ${ex.message}")
+            handleStartupFailure("Unable to start interaction (${ex.javaClass.simpleName}): ${ex.message}")
             Result.failure(ex)
         }
     }
@@ -357,6 +375,13 @@ class InteractionCoordinator(
 
     fun refreshElapsedTime() {
         val interaction = activeInteraction() ?: return
+        val currentState = _state.value.interactionState
+        val isMediaActive = reachedActiveState ||
+            currentState == InteractionState.ESTABLISHED ||
+            currentState == InteractionState.HELD ||
+            currentState == InteractionState.HELD_REMOTELY
+        if (!isMediaActive) return
+
         val elapsed = runCatching { interaction.interactionTimeElapsed }.getOrDefault(-1L)
         if (elapsed >= 0L) {
             _state.update { it.copy(elapsedMillis = elapsed) }
@@ -512,8 +537,8 @@ class InteractionCoordinator(
         elapsedTickerJob?.cancel()
         elapsedTickerJob = coordinatorScope.launch {
             while (isActive) {
-                refreshElapsedTime()
                 delay(1000L)
+                refreshElapsedTime()
             }
         }
     }
@@ -542,6 +567,7 @@ class InteractionCoordinator(
     }
 
     fun onActivityResumed() {
+        setMinimizedInApp(false)
         val interaction = videoInteraction ?: return
         val device = videoDevice ?: return
 
@@ -607,6 +633,7 @@ class InteractionCoordinator(
                 interactionState = InteractionState.FAILED,
                 errorMessage = message,
                 isDiscardCompleted = true,
+                isMinimizedInApp = false,
                 isLocked = false
             )
         }
@@ -631,6 +658,7 @@ class InteractionCoordinator(
         _state.update {
             it.copy(
                 isLocked = false,
+                isMinimizedInApp = false,
                 isDiscardCompleted = true
             )
         }

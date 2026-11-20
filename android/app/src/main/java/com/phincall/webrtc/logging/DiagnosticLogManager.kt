@@ -45,6 +45,31 @@ class DiagnosticLogManager(private val context: Context) {
         }
     }
 
+    fun recordCrash(threadName: String, error: Throwable) {
+        val cfg = activeConfig
+        if (!cfg.logToDevice) return
+
+        synchronized(lock) {
+            runCatching {
+                val file = resolveLogFile(cfg.logFileName)
+                val stamp = dateFormat.format(Date())
+                val summary = buildString {
+                    append("${error.javaClass.name}: ${redactSecrets(error.message.orEmpty())}")
+                    error.cause?.let { cause ->
+                        append(" | cause=${cause.javaClass.name}: ${redactSecrets(cause.message.orEmpty())}")
+                    }
+                    val frames = error.stackTrace.take(8).joinToString(" <- ") {
+                        "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+                    }
+                    if (frames.isNotEmpty()) {
+                        append(" | trace=$frames")
+                    }
+                }
+                file.appendText("$stamp [FATAL/$threadName] $summary\n")
+            }
+        }
+    }
+
     fun createShareLogIntent(config: LoggingConfig): Intent? {
         val file = resolveLogFile(config.logFileName)
         if (!file.exists() || file.length() == 0L) {

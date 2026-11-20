@@ -406,27 +406,32 @@ class RuntimeConfigTest {
     fun activeCallStickyBannerVisibilityRespectsCallStateAndSplashRoute() {
         assertFalse(shouldShowActiveCallStickyBanner(CallStateSnapshot(), isSplashRoute = false))
 
-        val activeAudio = CallStateSnapshot(
+        // Starting a call defaults directly to InCallActivity without showing the sticky bar on Home.
+        val launchingAudio = CallStateSnapshot(
             isLocked = true,
             mediaMode = CallMediaMode.AUDIO,
             interactionState = InteractionState.ESTABLISHED,
+            isMinimizedInApp = false,
             isDiscardCompleted = false
         )
-        assertTrue(shouldShowActiveCallStickyBanner(activeAudio, isSplashRoute = false))
-        assertFalse(shouldShowActiveCallStickyBanner(activeAudio, isSplashRoute = true))
+        assertFalse(shouldShowActiveCallStickyBanner(launchingAudio, isSplashRoute = false))
 
-        val activeVideo = activeAudio.copy(mediaMode = CallMediaMode.VIDEO)
-        assertTrue(shouldShowActiveCallStickyBanner(activeVideo, isSplashRoute = false))
+        val minimizedAudio = launchingAudio.copy(isMinimizedInApp = true)
+        assertTrue(shouldShowActiveCallStickyBanner(minimizedAudio, isSplashRoute = false))
+        assertFalse(shouldShowActiveCallStickyBanner(minimizedAudio, isSplashRoute = true))
+
+        val minimizedVideo = minimizedAudio.copy(mediaMode = CallMediaMode.VIDEO)
+        assertTrue(shouldShowActiveCallStickyBanner(minimizedVideo, isSplashRoute = false))
 
         assertFalse(
             shouldShowActiveCallStickyBanner(
-                activeVideo.copy(isDiscardCompleted = true),
+                minimizedVideo.copy(isDiscardCompleted = true),
                 isSplashRoute = false
             )
         )
         assertFalse(
             shouldShowActiveCallStickyBanner(
-                activeVideo.copy(isLocked = false, isDiscardCompleted = true),
+                minimizedVideo.copy(isLocked = false, isDiscardCompleted = true),
                 isSplashRoute = false
             )
         )

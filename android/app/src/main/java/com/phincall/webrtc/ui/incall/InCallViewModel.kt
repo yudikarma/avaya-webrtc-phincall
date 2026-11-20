@@ -70,6 +70,7 @@ class InCallViewModel @Inject constructor(
     fun sendDtmf(digit: String) = interactionCoordinator.sendDtmf(digit)
     fun selectAudioDevice(device: AudioDeviceType) = interactionCoordinator.selectAudioDevice(device)
     fun hangUpAndDiscard() = interactionCoordinator.hangUpAndDiscard()
+    fun setMinimizedInApp(minimized: Boolean) = interactionCoordinator.setMinimizedInApp(minimized)
     fun onBackgrounded(isInternalMinimize: Boolean = false) =
         interactionCoordinator.onActivityStopped(isInternalMinimize)
     fun onResumed() = interactionCoordinator.onActivityResumed()

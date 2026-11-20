@@ -1,21 +1,24 @@
 package com.phincall.webrtc.ui.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Mic
@@ -34,19 +37,23 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.avaya.ocs.Services.Work.Enums.InteractionState
 import com.phincall.webrtc.config.CallMediaMode
 import com.phincall.webrtc.ui.theme.CrimsonAccent
-import com.phincall.webrtc.ui.theme.StatusGoodLight
 import com.phincall.webrtc.webrtc.CallStateSnapshot
 import java.util.Locale
 
-private val BannerMutedEmerald = Color(0xFF0E5333)
-private val BannerSubtitleTint = Color(0xFFE8F5EE)
+private val WhatsAppCallGreen = Color(0xFF0E7142)
+private val WhatsAppMuteIdleBg = Color(0x38000000)
 
 internal fun shouldShowActiveCallStickyBanner(
     snapshot: CallStateSnapshot,
     isSplashRoute: Boolean
-): Boolean = !isSplashRoute && snapshot.isLocked && !snapshot.isDiscardCompleted
+): Boolean = !isSplashRoute &&
+    snapshot.isLocked &&
+    !snapshot.isDiscardCompleted &&
+    snapshot.isMinimizedInApp
 
 internal fun formatActiveCallDuration(elapsedMs: Long): String {
     val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
@@ -61,7 +68,7 @@ internal fun formatActiveCallDuration(elapsedMs: Long): String {
 }
 
 /**
- * Persistent header bar shown across non-call screens while an audio or video interaction stays live.
+ * Slim WhatsApp-style top bar pinned above non-call screens after the user minimizes an ongoing call.
  */
 @Composable
 fun ActiveCallStickyBanner(
@@ -71,24 +78,16 @@ fun ActiveCallStickyBanner(
     onToggleAudioMute: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val callLabel = if (snapshot.mediaMode == CallMediaMode.VIDEO) {
-        "Active Video Call"
+    val labelText = if (destination.isNotBlank()) {
+        "Tap to return to call | $destination"
     } else {
-        "Active Voice Call"
+        "Tap to return to call"
     }
-    val titleText = if (destination.isNotBlank()) {
-        "$callLabel | $destination"
-    } else {
-        callLabel
-    }
-    val holdSuffix = if (snapshot.isHeldLocally || snapshot.isHeldRemotely) " | HELD" else ""
-    val subtitleText = buildString {
-        append(formatActiveCallDuration(snapshot.elapsedMillis))
-        append(" | ")
-        append(snapshot.interactionState.name)
-        append(" | ")
-        append(snapshot.platformType.name)
-        append(holdSuffix)
+    val statusText = when {
+        snapshot.isHeldLocally || snapshot.isHeldRemotely -> "On hold"
+        snapshot.interactionState == InteractionState.ESTABLISHED || snapshot.elapsedMillis > 0L ->
+            formatActiveCallDuration(snapshot.elapsedMillis)
+        else -> "Connecting"
     }
 
     Surface(
@@ -99,65 +98,59 @@ fun ActiveCallStickyBanner(
                 onClickLabel = "Return to active call",
                 onClick = onReturnToCall
             ),
-        color = StatusGoodLight,
+        color = WhatsAppCallGreen,
         contentColor = Color.White,
-        shadowElevation = 4.dp
+        shadowElevation = 2.dp
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
-                )
-                .defaultMinSize(minHeight = 52.dp)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                modifier = Modifier.size(36.dp),
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.16f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (snapshot.mediaMode == CallMediaMode.VIDEO) {
-                            Icons.Rounded.Videocam
-                        } else {
-                            Icons.Rounded.Call
-                        },
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = titleText,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subtitleText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
-                    color = BannerSubtitleTint,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+                    )
+                    .defaultMinSize(minHeight = 44.dp)
+                    .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Surface(
+                Icon(
+                    imageVector = if (snapshot.mediaMode == CallMediaMode.VIDEO) {
+                        Icons.Rounded.Videocam
+                    } else {
+                        Icons.Rounded.Call
+                    },
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(17.dp)
+                )
+
+                Text(
+                    text = labelText,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFeatureSettings = "tnum"
+                    ),
+                    color = Color.White,
+                    maxLines = 1
+                )
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                Box(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
@@ -166,10 +159,15 @@ fun ActiveCallStickyBanner(
                             onClickLabel = if (snapshot.isAudioMuted) "Unmute microphone" else "Mute microphone",
                             onClick = onToggleAudioMute
                         ),
-                    shape = CircleShape,
-                    color = if (snapshot.isAudioMuted) CrimsonAccent else BannerMutedEmerald
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(if (snapshot.isAudioMuted) CrimsonAccent else WhatsAppMuteIdleBg),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = if (snapshot.isAudioMuted) {
                                 Icons.Rounded.MicOff
@@ -182,23 +180,18 @@ fun ActiveCallStickyBanner(
                                 "Mute microphone"
                             },
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
-
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = Color.White
-                ) {
-                    Text(
-                        text = "Return",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = BannerMutedEmerald,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                    )
-                }
             }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.5.dp)
+                    .background(Color.White.copy(alpha = 0.16f))
+            )
         }
     }
 }

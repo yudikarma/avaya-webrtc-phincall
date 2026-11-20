@@ -322,8 +322,10 @@ class InCallActivity : ComponentActivity() {
             }
         }
 
-        ActiveCallForegroundService.start(this, isVideoCall)
         viewModel.startInteractionOnce(stageRoot)
+        if (viewModel.startupFailure.value == null && !hasFinished) {
+            ActiveCallForegroundService.start(this, isVideoCall)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -350,6 +352,7 @@ class InCallActivity : ComponentActivity() {
 
     private fun minimizeToApp() {
         isMinimizingToApp = true
+        viewModel.setMinimizedInApp(true)
         startActivity(
             Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)

@@ -25,13 +25,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.CallEnd
 import androidx.compose.material.icons.rounded.Cameraswitch
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dialpad
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Pause
@@ -115,8 +115,8 @@ internal fun InCallTopHud(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 DockIconButton(
-                    icon = Icons.Rounded.KeyboardArrowDown,
-                    contentDescription = "Minimize active call and return to app",
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back to app (keep call active)",
                     containerColor = DockButtonIdle,
                     size = 44.dp,
                     onClick = onMinimizeToApp
