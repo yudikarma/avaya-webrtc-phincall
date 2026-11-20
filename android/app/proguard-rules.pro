@@ -1,8 +1,8 @@
-# Keep Avaya WebRTC Connect SDK, CSDK JNI bridges, and EventBus subscribers intact.
--keep class com.avaya.ocs.** { *; }
--keep class com.avaya.callprovider.** { *; }
--keep class com.avaya.clientservices.** { *; }
--keep class com.avaya.media.** { *; }
+# Keep Avaya WebRTC Connect SDK, WebRTC/CSDK JNI bridges, Jackson POJOs, and EventBus subscribers intact.
+-keep class com.avaya.** { *; }
+-keep class org.webrtc.** { *; }
+-keep class org.greenrobot.eventbus.** { *; }
+-keep class com.fasterxml.jackson.** { *; }
 -keep class com.phincall.webrtc.auth.** { *; }
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 -keepclassmembers class * {
@@ -19,3 +19,4 @@
 -dontwarn io.netty.**
 -dontwarn org.slf4j.**
 -dontwarn com.fasterxml.jackson.**
+-dontwarn org.webrtc.**
